@@ -29,11 +29,14 @@ const getConfig = () => {
 // Global configuration object
 window.APP_CONFIG = getConfig();
 
-// Silent mode untuk production - no console logs
+// Enhanced silent mode untuk production - no console logs
 if (!window.APP_CONFIG.DEBUG) {
-  console.log = function() {};
-  console.info = function() {};
-  console.warn = function() {};
+  const noop = () => {};
+  console.log = noop;
+  console.info = noop;
+  console.warn = noop;
+  console.debug = noop;
+  console.trace = noop;
 }
 
 // Secure logger utility
@@ -45,6 +48,7 @@ window.AppLogger = {
   },
   
   error: (...args) => {
+    // Always show errors, even in production
     console.error('❌', ...args);
   },
   
