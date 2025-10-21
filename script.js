@@ -45,7 +45,7 @@ if (window.jimpitanPWA) {
 let cachedElements = {};
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (window.APP_CONFIG.DEBUG) {
+  if (window.APP_CONFIG?.DEBUG) {
     APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
   }
   
@@ -500,7 +500,7 @@ async function uploadToDatabase() {
           tanggal_input: new Date().toISOString(),
         };
 
-        if (window.APP_CONFIG.DEBUG) {
+        if (window.APP_CONFIG?.DEBUG) {
           APP_LOGGER.log("📤 Upload payload:", payload);
         }
 
