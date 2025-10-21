@@ -145,7 +145,7 @@ function debounce(func, wait) {
   };
 }
 
-// load donatur ke dropdown
+// load donatur ke dropdown - LOGIKA ASLI DIPERTAHANKAN
 function muatDropdown(kategori = "kategori1") {
   const select = cachedElements.donatur;
   const names = kategoriDonatur[kategori];
@@ -167,21 +167,19 @@ function muatDropdown(kategori = "kategori1") {
 
     showNotification("✅ Semua donatur sudah diinput");
   } else {
-    const fragment = document.createDocumentFragment();
-
-    // Add default option
-    const defaultOption = new Option("Pilih Donatur", "");
-    defaultOption.disabled = true;
-    defaultOption.selected = true;
-    fragment.appendChild(defaultOption);
-
-    // Add donatur options
+    // LOGIKA ASLI: Langsung pilih donatur pertama yang belum diinput
     donaturBelumDiinput.forEach((nama) => {
       const option = new Option(nama, nama);
-      fragment.appendChild(option);
+      select.appendChild(option);
     });
 
-    select.appendChild(fragment);
+    // Auto-select yang pertama
+    select.selectedIndex = 0;
+
+    // Focus ke input nominal
+    setTimeout(() => {
+      cachedElements.pemasukan.focus();
+    }, 100);
 
     cachedElements.btnTambah.disabled = false;
     cachedElements.btnTambah.querySelector("#btnText").textContent = "Tambah";
@@ -296,7 +294,7 @@ function tambahData() {
   }
 
   renderTabelTerurut(kategori);
-  muatDropdown(kategori);
+  muatDropdown(kategori); // Ini akan auto-select donatur berikutnya
 
   cachedElements.pemasukan.value = "";
   updateTotalDisplay();
@@ -631,7 +629,7 @@ async function uploadToDatabase() {
     let errorMessage = err.message;
     if (err.name === "TypeError" && err.message.includes("Failed to fetch")) {
       errorMessage =
-        "Tidak dapat terhubung ke server. Periksa koneksi internet Anda atau URL API.";
+        "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
     }
 
     showUploadStatus(`❌ ${errorMessage}`, false);
@@ -674,12 +672,6 @@ async function handleOfflineUpload(kategoriValue) {
       true
     );
 
-    // Clear data (in offline mode we keep it until synced)
-    // dataDonasi = [];
-    // donaturTerinput[kategoriKey].clear();
-    // muatDropdown(kategoriKey);
-    // renderTabelTerurut(kategoriKey);
-    // updateTotalDisplay();
     updateUploadButtonState();
 
     return true;
@@ -688,16 +680,3 @@ async function handleOfflineUpload(kategoriValue) {
     return false;
   }
 }
-
-// Test API connection (for debugging)
-window.testAPIConnection = async function () {
-  try {
-    const response = await fetch(`${API_URL}/health`);
-    const data = await response.json();
-    APP_LOGGER.log("🔗 API Health Check:", data);
-    return data;
-  } catch (error) {
-    APP_LOGGER.error("❌ API Connection Test Failed:", error);
-    return null;
-  }
-};
