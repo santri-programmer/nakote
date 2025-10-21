@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistem Input Harian Data Jimpitan</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#7C3AED" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Jimpitan" />
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+      <header class="text-center mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold text-purple-700 mb-2">
+          <i class="fas fa-journal-whills mr-3"></i>Sistem Input Harian
+        </h1>
+        <div
+          id="tanggalHariIni"
+          class="inline-block bg-white px-4 py-2 rounded-lg shadow-sm text-gray-700 mb-4"
+        ></div>
+
+        <!-- Environment Badge -->
+        <div class="mb-4">
+          <span
+            id="environmentBadge"
+            class="inline-block px-3 py-1 text-xs font-semibold rounded-full ${window.APP_CONFIG?.ENV === 'production' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}"
+          >
+            ${window.APP_CONFIG?.ENV === 'production' ? '🚀 Production' : '🔧
+            Development'}
+          </span>
+        </div>
+      </header>
+
+      <div
+        id="notifikasi"
+        class="mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300"
+      ></div>
+
+      <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+          <i class="fas fa-plus-circle mr-2 text-purple-500"></i>Tambah Nominal
+        </h2>
+
+        <div class="mb-4">
+          <label
+            for="kategoriDonatur"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Pilih Kategori RT</label
+          >
+          <select
+            id="kategoriDonatur"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          >
+            <option value="kategori1" selected>RT Tengah</option>
+            <option value="kategori2">RT Kulon</option>
+            <option value="kategori3">RT Kidul</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label
+              for="donatur"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Nama</label
+            >
+            <select
+              id="donatur"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            >
+              <option value="">Pilih Donatur</option>
+            </select>
+          </div>
+          <div>
+            <label
+              for="pemasukan"
+              class="block text-sm font-medium text-gray-700 mb-1"
+              >Nominal Input</label
+            >
+            <input
+              type="number"
+              id="pemasukan"
+              placeholder="Masukkan nominal"
+              min="0"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            />
+          </div>
+          <div class="flex items-end">
+            <button
+              id="btnTambah"
+              class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+            >
+              <span id="btnText">Tambah</span>
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-md p-6 mb-6 overflow-x-auto">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+          <i class="fas fa-list-alt mr-2 text-purple-500"></i>Daftar Input Hari
+          Ini
+        </h2>
+
+        <table id="tabelDonasi" class="w-full text-left">
+          <thead>
+            <tr class="bg-gray-100 text-gray-700">
+              <th class="py-3 px-4 md:px-6 rounded-tl-lg">Nama</th>
+              <th class="py-3 px-4 md:px-6 text-right">Nominal</th>
+              <th class="py-3 px-4 md:px-6 text-center rounded-tr-lg">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Isi data akan di-render via JS -->
+          </tbody>
+          <tfoot>
+            <tr class="bg-gray-50 border-t border-gray-200">
+              <td class="py-3 px-4 md:px-6 font-semibold">Total</td>
+              <td
+                id="totalDonasi"
+                class="py-3 px-4 md:px-6 text-right font-mono font-semibold text-purple-700"
+              >
+                Rp 0
+              </td>
+              <td class="py-3 px-4 md:px-6"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-md p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+          <i class="fas fa-cloud-upload-alt mr-2 text-purple-500"></i>Upload ke
+          Database
+        </h2>
+
+        <div
+          id="uploadStatus"
+          class="mb-4 text-center p-4 rounded-xl transition-all duration-300"
+        ></div>
+
+        <div
+          class="flex flex-col md:flex-row md:items-center justify-center gap-4 p-4 text-gray-600 mb-4"
+        >
+          <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+          <span id="uploadInfo">Upload data input ke database server</span>
+        </div>
+
+        <div class="flex justify-center gap-4 flex-wrap">
+          <button
+            id="btnUpload"
+            class="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-lg transition duration-200 flex items-center justify-center gap-2 min-w-[140px] max-w-[280px]"
+          >
+            <i class="fas fa-upload"></i>Upload Data
+          </button>
+          <button
+            id="btnHapus"
+            class="bg-red-600 hover:bg-red-700 text-white py-2 px-6 rounded-lg transition duration-200 flex items-center justify-center gap-2 min-w-[140px] max-w-[280px]"
+          >
+            <i class="fas fa-trash-alt"></i>Hapus Data
+          </button>
+        </div>
+
+        <!-- Admin Link -->
+        <div class="mt-6 text-center">
+          <a
+            href="admin/dashboard.html"
+            class="text-purple-600 hover:text-purple-800 font-semibold flex items-center justify-center gap-2"
+          >
+            <i class="fas fa-chart-line"></i>
+            Akses Dashboard Admin
+          </a>
+        </div>
+      </div>
+
+      <!-- Environment Info -->
+      <div class="mt-8 text-center text-sm text-gray-500">
+        <p>
+          Environment:
+          <span id="envInfo">${window.APP_CONFIG?.ENV || 'unknown'}</span>
+        </p>
+        <p>
+          API:
+          <span id="apiInfo">${window.APP_CONFIG?.API_URL || 'unknown'}</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Load Configuration First -->
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+    <script src="pwa-manager.js"></script>
+
+    <script>
+      // Update environment info
+      document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("envInfo").textContent =
+          window.APP_CONFIG?.ENV || "unknown";
+        document.getElementById("apiInfo").textContent =
+          window.APP_CONFIG?.API_URL || "unknown";
+      });
+    </script>
+  </body>
+</html>

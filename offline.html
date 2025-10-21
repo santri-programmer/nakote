@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistem Jimpitan RT - Offline</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        background-color: #f5f5f5;
+        color: #333;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+        text-align: center;
+      }
+
+      .container {
+        max-width: 500px;
+        width: 100%;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        padding: 30px;
+      }
+
+      .offline-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+        color: #ff6b6b;
+      }
+
+      h1 {
+        font-size: 24px;
+        margin-bottom: 15px;
+        color: #333;
+      }
+
+      p {
+        margin-bottom: 25px;
+        color: #666;
+        line-height: 1.5;
+      }
+
+      .features {
+        text-align: left;
+        margin: 25px 0;
+        padding: 0 15px;
+      }
+
+      .feature-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .feature-item input[type="checkbox"] {
+        margin-right: 10px;
+        transform: scale(1.2);
+      }
+
+      .feature-item label {
+        color: #555;
+      }
+
+      .btn-retry {
+        background-color: #4a90e2;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        margin-top: 10px;
+        width: 100%;
+        font-weight: 600;
+      }
+
+      .btn-retry:hover {
+        background-color: #3a7bc8;
+      }
+
+      .data-section {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        text-align: left;
+      }
+
+      .data-section h3 {
+        margin-bottom: 10px;
+        color: #333;
+      }
+
+      .data-input {
+        width: 100%;
+        padding: 10px;
+        margin: 5px 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      .btn-save {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+
+      .saved-data {
+        margin-top: 15px;
+        max-height: 150px;
+        overflow-y: auto;
+      }
+
+      .data-item {
+        background: white;
+        padding: 8px;
+        margin: 5px 0;
+        border-radius: 4px;
+        border-left: 4px solid #4a90e2;
+      }
+
+      .footer {
+        margin-top: 30px;
+        color: #888;
+        font-size: 14px;
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          padding: 20px;
+        }
+
+        h1 {
+          font-size: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="offline-icon">📶</div>
+      <h1>Anda Sedang Offline</h1>
+      <p>
+        Tidak dapat terhubung ke internet. Silakan periksa koneksi Anda dan coba
+        lagi.
+      </p>
+
+      <div class="features">
+        <div class="feature-item">
+          <input type="checkbox" id="feature1" checked disabled />
+          <label for="feature1"
+            >Data input tetap dapat disimpan secara lokal</label
+          >
+        </div>
+        <div class="feature-item">
+          <input type="checkbox" id="feature2" checked disabled />
+          <label for="feature2">Data akan diupload otomatis saat online</label>
+        </div>
+        <div class="feature-item">
+          <input type="checkbox" id="feature3" checked disabled />
+          <label for="feature3">Halaman akan reload otomatis saat online</label>
+        </div>
+      </div>
+
+      <!-- Section untuk input data -->
+      <div class="data-section">
+        <h3>Input Data Jimpitan</h3>
+        <input
+          type="text"
+          id="nama"
+          class="data-input"
+          placeholder="Nama Warga"
+        />
+        <input
+          type="number"
+          id="jumlah"
+          class="data-input"
+          placeholder="Jumlah Jimpitan"
+        />
+        <input type="date" id="tanggal" class="data-input" />
+        <button class="btn-save" onclick="simpanData()">
+          Simpan Data Lokal
+        </button>
+
+        <div class="saved-data" id="savedData">
+          <!-- Data yang disimpan akan muncul di sini -->
+        </div>
+      </div>
+
+      <button class="btn-retry" onclick="cobaKoneksi()">Coba Lagi</button>
+
+      <div class="footer">Sistem Jimpitan RT - PWA dengan Redis</div>
+    </div>
+
+    <script>
+      // Simulasi Redis menggunakan localStorage
+      const Redis = {
+        set: (key, value) => {
+          localStorage.setItem(`redis_${key}`, JSON.stringify(value));
+        },
+
+        get: (key) => {
+          const data = localStorage.getItem(`redis_${key}`);
+          return data ? JSON.parse(data) : null;
+        },
+
+        del: (key) => {
+          localStorage.removeItem(`redis_${key}`);
+        },
+
+        keys: (pattern) => {
+          const keys = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith("redis_") && key.includes(pattern)) {
+              keys.push(key.replace("redis_", ""));
+            }
+          }
+          return keys;
+        },
+      };
+
+      // Key untuk menyimpan data jimpitan
+      const JIMPITAN_KEY = "jimpitan_data";
+
+      // Fungsi untuk menyimpan data
+      function simpanData() {
+        const nama = document.getElementById("nama").value;
+        const jumlah = document.getElementById("jumlah").value;
+        const tanggal = document.getElementById("tanggal").value;
+
+        if (!nama || !jumlah || !tanggal) {
+          alert("Harap isi semua field!");
+          return;
+        }
+
+        // Ambil data yang sudah ada
+        let existingData = Redis.get(JIMPITAN_KEY) || [];
+
+        // Tambah data baru
+        const newData = {
+          id: Date.now(),
+          nama: nama,
+          jumlah: parseInt(jumlah),
+          tanggal: tanggal,
+          timestamp: new Date().toISOString(),
+          status: "pending", // pending, synced
+        };
+
+        existingData.push(newData);
+
+        // Simpan ke Redis (localStorage)
+        Redis.set(JIMPITAN_KEY, existingData);
+
+        // Reset form
+        document.getElementById("nama").value = "";
+        document.getElementById("jumlah").value = "";
+        document.getElementById("tanggal").value = "";
+
+        // Tampilkan data yang disimpan
+        tampilkanData();
+
+        alert("Data berhasil disimpan secara lokal!");
+      }
+
+      // Fungsi untuk menampilkan data yang disimpan
+      function tampilkanData() {
+        const savedDataDiv = document.getElementById("savedData");
+        const data = Redis.get(JIMPITAN_KEY) || [];
+
+        if (data.length === 0) {
+          savedDataDiv.innerHTML = "<p>Belum ada data yang disimpan</p>";
+          return;
+        }
+
+        savedDataDiv.innerHTML = data
+          .map(
+            (item) => `
+                <div class="data-item">
+                    <strong>${
+                      item.nama
+                    }</strong> - Rp ${item.jumlah.toLocaleString()} 
+                    <br><small>${new Date(item.tanggal).toLocaleDateString(
+                      "id-ID"
+                    )} - ${item.status}</small>
+                </div>
+            `
+          )
+          .join("");
+      }
+
+      // Fungsi untuk sinkronisasi data ketika online
+      function sinkronisasiData() {
+        if (!navigator.onLine) return;
+
+        const data = Redis.get(JIMPITAN_KEY) || [];
+        const pendingData = data.filter((item) => item.status === "pending");
+
+        if (pendingData.length === 0) return;
+
+        // Simulasi pengiriman data ke server
+        console.log("Mengirim data ke server:", pendingData);
+
+        // Update status data menjadi synced
+        const updatedData = data.map((item) => {
+          if (item.status === "pending") {
+            return { ...item, status: "synced" };
+          }
+          return item;
+        });
+
+        Redis.set(JIMPITAN_KEY, updatedData);
+        tampilkanData();
+
+        console.log("Data berhasil disinkronisasi dengan server");
+      }
+
+      // Fungsi coba koneksi
+      function cobaKoneksi() {
+        if (navigator.onLine) {
+          // Coba sinkronisasi data jika online
+          sinkronisasiData();
+          location.reload();
+        } else {
+          alert("Masih offline. Periksa koneksi internet Anda.");
+        }
+      }
+
+      // Deteksi koneksi online/offline
+      window.addEventListener("online", function () {
+        console.log("Koneksi kembali online, melakukan sinkronisasi...");
+        sinkronisasiData();
+        setTimeout(() => {
+          location.reload();
+        }, 2000);
+      });
+
+      // Coba koneksi secara berkala
+      setInterval(function () {
+        if (navigator.onLine) {
+          sinkronisasiData();
+        }
+      }, 15000); // Coba setiap 15 detik
+
+      // Inisialisasi saat halaman dimuat
+      document.addEventListener("DOMContentLoaded", function () {
+        tampilkanData();
+
+        // Set tanggal default ke hari ini
+        const today = new Date().toISOString().split("T")[0];
+        document.getElementById("tanggal").value = today;
+
+        // Cek jika online, lakukan sinkronisasi
+        if (navigator.onLine) {
+          sinkronisasiData();
+        }
+      });
+    </script>
+  </body>
+</html>

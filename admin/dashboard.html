@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Admin Jimpitan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="admin.css" />
+  </head>
+
+  <body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header
+      class="bg-purple-700 text-white p-4 shadow-md flex justify-between items-center"
+    >
+      <h1 class="text-2xl font-bold">
+        <i class="fas fa-chart-line mr-2"></i>Dashboard Admin
+      </h1>
+      <button
+        id="btnLogout"
+        class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-semibold"
+      >
+        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+      </button>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6 max-w-6xl">
+      
+  <h2
+    class="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2"
+  >
+    <i class="fas fa-filter text-purple-500"></i>Filter Laporan
+  </h2>
+
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-600 mb-1"
+        >Pilih Kategori RT</label
+      >
+      <select
+        id="filterKategori"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2"
+      >
+        <option value="semua">Semua RT</option>
+        <option value="RT Tengah">RT Tengah</option>
+        <option value="RT Kulon">RT Kulon</option>
+        <option value="RT Kidul">RT Kidul</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-600 mb-1"
+        >Jenis Laporan</label
+      >
+      <select
+        id="filterPeriode"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2"
+      >
+        <option value="harian">Harian</option>
+        <option value="mingguan">Mingguan</option>
+        <option value="bulanan">Bulanan</option>
+      </select>
+    </div>
+
+    <!-- TAMBAHAN: Input Tanggal Custom -->
+    <div>
+      <label class="block text-sm font-medium text-gray-600 mb-1"
+        >Tanggal / Periode</label
+      >
+      <input
+        type="date"
+        id="filterTanggal"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2"
+      />
+    </div>
+
+    <div class="flex items-end">
+      <button
+        id="btnGenerate"
+        class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 w-full rounded-lg font-semibold"
+      >
+        <i class="fas fa-sync-alt mr-2"></i>Generate Laporan
+      </button>
+    </div>
+  </div>
+
+  <!-- Info tentang penggunaan tanggal -->
+  <div id="tanggalInfo" class="mt-2 text-sm text-gray-500">
+    <i class="fas fa-info-circle mr-1"></i>
+    <span id="infoText">
+      Untuk laporan harian: pilih tanggal spesifik. Mingguan: pilih tanggal di minggu tersebut. Bulanan: pilih tanggal di bulan tersebut.
+    </span>
+  </div>
+</section>
+
+      <!-- Tabel Laporan -->
+      <section class="bg-white shadow-md rounded-xl p-6">
+        <h2
+          class="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2"
+        >
+          <i class="fas fa-table text-purple-500"></i>Data Laporan
+        </h2>
+
+        <div class="overflow-x-auto">
+          <table id="tabelLaporan" class="w-full text-left border-collapse">
+            <thead class="bg-gray-100 text-gray-700">
+              <tr>
+                <th class="py-3 px-4">Tanggal</th>
+                <th class="py-3 px-4">Nama Donatur</th>
+                <th class="py-3 px-4">Kategori RT</th>
+                <th class="py-3 px-4 text-right">Nominal</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot class="bg-gray-50 border-t">
+              <tr>
+                <td colspan="3" class="py-3 px-4 font-semibold text-right">
+                  Total:
+                </td>
+                <td
+                  id="totalLaporan"
+                  class="py-3 px-4 font-mono font-semibold text-right text-purple-700"
+                >
+                  Rp 0
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="mt-6 flex gap-4 flex-wrap justify-center">
+          <button
+            id="btnExportPDF"
+            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold"
+          >
+            <i class="fas fa-file-pdf mr-2"></i>Export PDF
+          </button>
+          <button
+            id="btnExportExcel"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold"
+          >
+            <i class="fas fa-file-excel mr-2"></i>Export Excel
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script src="admin.js"></script>
+  </body>
+</html>

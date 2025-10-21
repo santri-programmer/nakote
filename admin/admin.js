@@ -1,0 +1,454 @@
+// Admin Dashboard - Production Ready
+const API_URL = window.APP_CONFIG?.API_URL || "https://api.pnakote.my.id/api";
+const APP_LOGGER = window.AppLogger || console;
+
+document.addEventListener("DOMContentLoaded", () => {
+  APP_LOGGER.log("🚀 Admin Dashboard Initializing...");
+
+  const kategori = document.getElementById("filterKategori");
+  const periode = document.getElementById("filterPeriode");
+  const tanggal = document.getElementById("filterTanggal");
+  const btnGenerate = document.getElementById("btnGenerate");
+  const btnExportPDF = document.getElementById("btnExportPDF");
+  const btnExportExcel = document.getElementById("btnExportExcel");
+  const infoText = document.getElementById("infoText");
+  const btnLogout = document.getElementById("btnLogout");
+
+  // Set tanggal default ke hari ini
+  const today = new Date().toISOString().split("T")[0];
+  tanggal.value = today;
+
+  // Load data saat pertama kali buka
+  loadInitialData();
+
+  // Event Listeners
+  btnGenerate.addEventListener("click", async () => {
+    await generateLaporan();
+  });
+
+  btnExportPDF.addEventListener("click", () => {
+    exportLaporan("pdf");
+  });
+
+  btnExportExcel.addEventListener("click", () => {
+    exportLaporan("xlsx");
+  });
+
+  btnLogout.addEventListener("click", () => {
+    if (confirm("Apakah Anda yakin ingin logout?")) {
+      localStorage.removeItem("adminToken");
+      window.location.href = "../index.html";
+    }
+  });
+
+  // Event listeners untuk real-time updates
+  kategori.addEventListener("change", () => {
+    updateUIState();
+  });
+
+  periode.addEventListener("change", () => {
+    updateTanggalInfo();
+    updateUIState();
+  });
+
+  tanggal.addEventListener("change", () => {
+    updateUIState();
+  });
+
+  // Update info text berdasarkan periode
+  updateTanggalInfo();
+});
+
+// Update info text berdasarkan periode yang dipilih
+function updateTanggalInfo() {
+  const periode = document.getElementById("filterPeriode").value;
+  const infoText = document.getElementById("infoText");
+
+  switch (periode) {
+    case "harian":
+      infoText.textContent = "Pilih tanggal spesifik untuk laporan harian";
+      break;
+    case "mingguan":
+      infoText.textContent =
+        "Pilih tanggal di minggu yang diinginkan (akan menampilkan data seminggu dari Senin-Minggu)";
+      break;
+    case "bulanan":
+      infoText.textContent =
+        "Pilih tanggal di bulan yang diinginkan (akan menampilkan data sebulan penuh)";
+      break;
+    default:
+      infoText.textContent = "Pilih periode laporan";
+  }
+}
+
+// Fungsi untuk load data awal
+async function loadInitialData() {
+  try {
+    showLoadingState(true);
+    const data = await getLaporan("semua", "harian", "");
+    renderTabel(data);
+    showNotification("Data laporan berhasil dimuat", true);
+  } catch (error) {
+    showNotification("Gagal memuat data awal: " + error.message, false);
+  } finally {
+    showLoadingState(false);
+  }
+}
+
+// Fungsi utama generate laporan
+async function generateLaporan() {
+  const kategori = document.getElementById("filterKategori").value;
+  const periode = document.getElementById("filterPeriode").value;
+  const tanggal = document.getElementById("filterTanggal").value;
+
+  if (!kategori || !periode || !tanggal) {
+    showNotification(
+      "Pilih kategori, periode, dan tanggal terlebih dahulu",
+      false
+    );
+    return;
+  }
+
+  try {
+    showLoadingState(true);
+
+    APP_LOGGER.log("🔄 Generate Laporan Params:", {
+      kategori: kategori,
+      periode: periode,
+      tanggal: tanggal,
+    });
+
+    const data = await getLaporan(kategori, periode, tanggal);
+
+    APP_LOGGER.log("📊 Data Received:", data);
+
+    if (data && data.length > 0) {
+      renderTabel(data);
+      showNotification(
+        `Laporan ${periode} untuk ${kategori} berhasil digenerate`,
+        true
+      );
+    } else {
+      renderTabel([]);
+      showNotification(
+        `Tidak ada data untuk ${kategori} periode ${periode} pada tanggal ${formatTanggalDisplay(
+          tanggal
+        )}`,
+        "info"
+      );
+    }
+  } catch (error) {
+    APP_LOGGER.error("❌ Error generating report:", error);
+    showNotification("Gagal generate laporan: " + error.message, false);
+  } finally {
+    showLoadingState(false);
+  }
+}
+
+// Fungsi export laporan
+async function exportLaporan(format) {
+  const kategori = document.getElementById("filterKategori").value;
+  const periode = document.getElementById("filterPeriode").value;
+  const tanggal = document.getElementById("filterTanggal").value;
+
+  if (!kategori || !periode || !tanggal) {
+    showNotification(
+      "Pilih kategori, periode, dan tanggal terlebih dahulu",
+      false
+    );
+    return;
+  }
+
+  try {
+    APP_LOGGER.log(`📤 Export ${format.toUpperCase()} Params:`, {
+      format: format,
+      kategori: kategori,
+      periode: periode,
+      tanggal: tanggal,
+    });
+
+    // Test koneksi sebelum export
+    const testData = await getLaporan(kategori, periode, tanggal);
+    if (!testData || testData.length === 0) {
+      showNotification("Tidak ada data untuk di-export", "info");
+      return;
+    }
+
+    // Build export URL
+    const url = `${API_URL}/laporan/export?format=${format}&periode=${periode}&kategori=${encodeURIComponent(
+      kategori
+    )}&tanggal=${tanggal}`;
+    APP_LOGGER.log("🔗 Export URL:", url);
+
+    // Buka tab baru untuk export
+    const newWindow = window.open(url, "_blank");
+
+    if (!newWindow) {
+      throw new Error("Popup diblokir. Izinkan popup untuk situs ini.");
+    }
+
+    showNotification(
+      `Export ${format.toUpperCase()} berhasil dibuka di tab baru`,
+      true
+    );
+  } catch (error) {
+    APP_LOGGER.error(`❌ Error exporting ${format}:`, error);
+    showNotification(`Gagal export ${format}: ` + error.message, false);
+  }
+}
+
+// Fungsi get data laporan dari API dengan parameter tanggal
+async function getLaporan(kategori, periode, tanggal) {
+  try {
+    APP_LOGGER.log("📡 Fetching laporan:", { kategori, periode, tanggal });
+
+    // Build URL dengan parameter tanggal
+    let url = `${API_URL}/laporan?periode=${periode}&kategori=${encodeURIComponent(
+      kategori
+    )}`;
+    if (tanggal) {
+      url += `&tanggal=${tanggal}`;
+    }
+
+    APP_LOGGER.log("🔗 API URL:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const result = await response.json();
+    APP_LOGGER.log("✅ API Response:", result);
+
+    // Handle different response formats
+    if (result.success !== undefined) {
+      return result.data || [];
+    } else if (Array.isArray(result)) {
+      return result;
+    } else {
+      APP_LOGGER.warn("⚠️ Unknown response format:", result);
+      return [];
+    }
+  } catch (error) {
+    APP_LOGGER.error("❌ Error fetching laporan:", error);
+
+    // Enhanced error messages
+    if (
+      error.name === "TypeError" &&
+      error.message.includes("Failed to fetch")
+    ) {
+      throw new Error(
+        "Tidak dapat terhubung ke server. Periksa koneksi internet atau URL API."
+      );
+    }
+
+    throw error;
+  }
+}
+
+// Fungsi render tabel
+function renderTabel(data) {
+  const tbody = document.querySelector("#tabelLaporan tbody");
+  const totalDisplay = document.getElementById("totalLaporan");
+
+  // Clear existing data
+  tbody.innerHTML = "";
+
+  // Handle empty data
+  if (!data || data.length === 0) {
+    const emptyRow = document.createElement("tr");
+    emptyRow.innerHTML = `
+      <td colspan="4" class="py-4 px-4 text-center text-gray-500">
+        <i class="fas fa-inbox mr-2"></i>Tidak ada data laporan
+      </td>
+    `;
+    tbody.appendChild(emptyRow);
+    totalDisplay.textContent = "Rp 0";
+    return;
+  }
+
+  let total = 0;
+
+  // Render data rows
+  data.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.className = index % 2 === 0 ? "bg-white" : "bg-gray-50";
+    tr.innerHTML = `
+      <td class="py-3 px-4 border-b border-gray-200">${formatTanggal(
+        item.tanggal_input
+      )}</td>
+      <td class="py-3 px-4 border-b border-gray-200">${
+        item.nama_donatur || "-"
+      }</td>
+      <td class="py-3 px-4 border-b border-gray-200">${
+        item.kategori_rt || "Semua"
+      }</td>
+      <td class="py-3 px-4 border-b border-gray-200 text-right font-mono">${formatRupiah(
+        item.nominal
+      )}</td>
+    `;
+    tbody.appendChild(tr);
+    total += parseInt(item.nominal) || 0;
+  });
+
+  // Update total
+  totalDisplay.textContent = formatRupiah(total);
+  APP_LOGGER.log("📈 Total calculated:", total);
+}
+
+// Helper function untuk format tanggal
+function formatTanggal(tanggal) {
+  if (!tanggal) return "-";
+
+  try {
+    const date = new Date(tanggal);
+    return date.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch (error) {
+    return tanggal;
+  }
+}
+
+// Helper function untuk format Rupiah
+function formatRupiah(nominal) {
+  if (!nominal) return "Rp 0";
+  return "Rp " + Number(nominal).toLocaleString("id-ID");
+}
+
+// Helper function untuk format tanggal display
+function formatTanggalDisplay(tanggalString) {
+  if (!tanggalString) return "";
+
+  const date = new Date(tanggalString);
+  return date.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// Fungsi untuk menampilkan notifikasi
+function showNotification(message, type = "info") {
+  // Hapus notifikasi existing
+  const existingNotif = document.getElementById("customNotification");
+  if (existingNotif) {
+    existingNotif.remove();
+  }
+
+  // Buat notifikasi baru
+  const notif = document.createElement("div");
+  notif.id = "customNotification";
+
+  const bgColor =
+    type === true
+      ? "bg-green-100 border-green-400 text-green-700"
+      : type === false
+      ? "bg-red-100 border-red-400 text-red-700"
+      : "bg-blue-100 border-blue-400 text-blue-700";
+
+  notif.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-lg border-2 shadow-lg transition-all duration-300 transform translate-x-0 ${bgColor}`;
+  notif.innerHTML = `
+    <div class="flex items-center">
+      <i class="fas ${
+        type === true
+          ? "fa-check-circle"
+          : type === false
+          ? "fa-exclamation-circle"
+          : "fa-info-circle"
+      } mr-3"></i>
+      <span class="font-semibold">${message}</span>
+      <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-gray-500 hover:text-gray-700">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(notif);
+
+  // Auto remove setelah 5 detik
+  setTimeout(() => {
+    if (notif.parentElement) {
+      notif.style.transform = "translateX(100%)";
+      setTimeout(() => notif.remove(), 300);
+    }
+  }, 5000);
+}
+
+// Fungsi untuk show/hide loading state
+function showLoadingState(show) {
+  const btnGenerate = document.getElementById("btnGenerate");
+  const btnExportPDF = document.getElementById("btnExportPDF");
+  const btnExportExcel = document.getElementById("btnExportExcel");
+
+  if (show) {
+    btnGenerate.innerHTML =
+      '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
+    btnGenerate.disabled = true;
+    btnExportPDF.disabled = true;
+    btnExportExcel.disabled = true;
+  } else {
+    btnGenerate.innerHTML =
+      '<i class="fas fa-sync-alt mr-2"></i>Generate Laporan';
+    btnGenerate.disabled = false;
+    btnExportPDF.disabled = false;
+    btnExportExcel.disabled = false;
+  }
+}
+
+// Fungsi untuk update UI state
+function updateUIState() {
+  const kategori = document.getElementById("filterKategori").value;
+  const periode = document.getElementById("filterPeriode").value;
+  const tanggal = document.getElementById("filterTanggal").value;
+
+  APP_LOGGER.log("🔄 UI State Updated:", { kategori, periode, tanggal });
+}
+
+// Export functions untuk global access
+window.generateLaporan = generateLaporan;
+window.exportLaporan = exportLaporan;
+
+// Test functions untuk debugging
+window.adminDebug = {
+  testConnection: async function () {
+    try {
+      const response = await fetch(`${API_URL}/health`);
+      const data = await response.json();
+      APP_LOGGER.log("🔗 Connection test:", data);
+      return data;
+    } catch (error) {
+      APP_LOGGER.error("❌ Connection test failed:", error);
+      return null;
+    }
+  },
+
+  testAllEndpoints: async function () {
+    const endpoints = [
+      "/api/",
+      "/api/donasi",
+      "/api/donatur",
+      "/api/laporan?periode=harian&kategori=semua",
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(`${API_URL}${endpoint}`);
+        const data = await response.json();
+        APP_LOGGER.log(`✅ ${endpoint}:`, data);
+      } catch (error) {
+        APP_LOGGER.error(`❌ ${endpoint}:`, error.message);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  },
+};
