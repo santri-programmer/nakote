@@ -25,17 +25,13 @@ const EXTERNAL_RESOURCES = [
 
 // Install event - cache core assets
 self.addEventListener("install", (event) => {
-  console.log("🟢 Service Worker installing...");
-
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) => {
-        console.log("📦 Caching static assets...");
         return cache.addAll([...STATIC_ASSETS, ...EXTERNAL_RESOURCES]);
       })
       .then(() => {
-        console.log("✅ All assets cached");
         return self.skipWaiting();
       })
       .catch((error) => {
@@ -46,8 +42,6 @@ self.addEventListener("install", (event) => {
 
 // Activate event - cleanup old caches
 self.addEventListener("activate", (event) => {
-  console.log("🟢 Service Worker activating...");
-
   event.waitUntil(
     caches
       .keys()
@@ -56,14 +50,12 @@ self.addEventListener("activate", (event) => {
           cacheNames.map((cacheName) => {
             // Delete old caches
             if (cacheName !== CACHE_NAME && cacheName !== API_CACHE_NAME) {
-              console.log("🗑️ Deleting old cache:", cacheName);
               return caches.delete(cacheName);
             }
           })
         );
       })
       .then(() => {
-        console.log("✅ Service Worker activated");
         return self.clients.claim();
       })
   );
@@ -101,11 +93,9 @@ async function handleApiRequest(request) {
     return networkResponse;
   } catch (error) {
     // Network failed, try cache
-    console.log("🌐 Network failed, trying cache...");
     const cachedResponse = await cache.match(request);
 
     if (cachedResponse) {
-      console.log("✅ Serving from cache:", request.url);
       return cachedResponse;
     }
 
@@ -146,8 +136,6 @@ async function handleStaticRequest(request) {
     return networkResponse;
   } catch (error) {
     // Network failed
-    console.log("❌ Network failed for:", request.url);
-
     // For navigation requests, return offline page
     if (request.mode === "navigate") {
       return caches.match("/nakote/offline.html");
@@ -162,8 +150,6 @@ async function handleStaticRequest(request) {
 
 // Background sync for offline data
 self.addEventListener("sync", (event) => {
-  console.log("🔄 Background sync triggered:", event.tag);
-
   if (event.tag === "sync-pending-data") {
     event.waitUntil(syncPendingData());
   }
@@ -174,7 +160,6 @@ async function syncPendingData() {
   try {
     // Get pending data from IndexedDB
     const pendingData = await getPendingData();
-    console.log(`🔄 Syncing ${pendingData.length} pending items...`);
 
     for (const item of pendingData) {
       try {
@@ -187,10 +172,7 @@ async function syncPendingData() {
         });
 
         if (response.ok) {
-          console.log("✅ Successfully synced:", item.id);
           await removePendingItem(item.id);
-        } else {
-          console.error("❌ Sync failed for:", item.id);
         }
       } catch (error) {
         console.error("❌ Error syncing item:", error);
