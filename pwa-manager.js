@@ -9,7 +9,9 @@ class JimpitanPWA {
   }
 
   async init() {
-    console.log("🚀 Initializing Jimpitan PWA...");
+    if (window.APP_CONFIG?.DEBUG) {
+      console.log("🚀 Initializing Jimpitan PWA...");
+    }
 
     // Register Service Worker
     await this.registerServiceWorker();
@@ -26,7 +28,9 @@ class JimpitanPWA {
     // Initialize offline functionality
     this.setupOfflineFunctionality();
 
-    console.log("✅ Jimpitan PWA initialized");
+    if (window.APP_CONFIG?.DEBUG) {
+      console.log("✅ Jimpitan PWA initialized");
+    }
   }
 
   // Register Service Worker
@@ -34,12 +38,18 @@ class JimpitanPWA {
     if ("serviceWorker" in navigator) {
       try {
         this.serviceWorkerRegistration = await navigator.serviceWorker.register("/nakote/sw.js");
-        console.log("🟢 Service Worker registered:", this.serviceWorkerRegistration);
+        
+        if (window.APP_CONFIG?.DEBUG) {
+          console.log("🟢 Service Worker registered:", this.serviceWorkerRegistration);
+        }
 
         // Check for updates
         this.serviceWorkerRegistration.addEventListener("updatefound", () => {
           const newWorker = this.serviceWorkerRegistration.installing;
-          console.log("🔄 New Service Worker found:", newWorker);
+          
+          if (window.APP_CONFIG?.DEBUG) {
+            console.log("🔄 New Service Worker found:", newWorker);
+          }
 
           newWorker.addEventListener("statechange", () => {
             if (
@@ -54,21 +64,27 @@ class JimpitanPWA {
         console.error("❌ Service Worker registration failed:", error);
       }
     } else {
-      console.warn("⚠️ Service Workers not supported");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.warn("⚠️ Service Workers not supported");
+      }
     }
   }
 
   // Handle app installation prompt
   setupInstallPrompt() {
     window.addEventListener("beforeinstallprompt", (e) => {
-      console.log("📱 Install prompt triggered");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("📱 Install prompt triggered");
+      }
       e.preventDefault();
       this.deferredPrompt = e;
       this.showInstallPromotion();
     });
 
     window.addEventListener("appinstalled", () => {
-      console.log("✅ PWA installed successfully");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("✅ PWA installed successfully");
+      }
       this.isInstalled = true;
       this.deferredPrompt = null;
       this.hideInstallPromotion();
@@ -152,7 +168,9 @@ class JimpitanPWA {
       this.deferredPrompt.prompt();
       const { outcome } = await this.deferredPrompt.userChoice;
 
-      console.log(`User responded to install prompt: ${outcome}`);
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log(`User responded to install prompt: ${outcome}`);
+      }
 
       if (outcome === "accepted") {
         this.isInstalled = true;
@@ -171,14 +189,18 @@ class JimpitanPWA {
     // Check if in standalone mode
     if (window.matchMedia("(display-mode: standalone)").matches) {
       this.isInstalled = true;
-      console.log("📱 App running in standalone mode");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("📱 App running in standalone mode");
+      }
       return;
     }
 
     // Check if launched from home screen
     if (window.navigator.standalone === true) {
       this.isInstalled = true;
-      console.log("📱 App launched from home screen");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("📱 App launched from home screen");
+      }
       return;
     }
 
@@ -191,14 +213,18 @@ class JimpitanPWA {
   // Online/offline detection
   setupConnectivity() {
     window.addEventListener("online", () => {
-      console.log("🌐 App is online");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("🌐 App is online");
+      }
       this.isOnline = true;
       this.showOnlineStatus();
       this.syncOfflineData();
     });
 
     window.addEventListener("offline", () => {
-      console.log("📴 App is offline");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("📴 App is offline");
+      }
       this.isOnline = false;
       this.showOfflineStatus();
     });
@@ -255,22 +281,29 @@ class JimpitanPWA {
 
   setupOfflineForms() {
     // This will be integrated with the existing form handlers
-    console.log("🔧 Setting up offline forms...");
+    if (window.APP_CONFIG?.DEBUG) {
+      console.log("🔧 Setting up offline forms...");
+    }
   }
 
   async setupPeriodicSync() {
-    // PERBAIKAN: Gunakan this.serviceWorkerRegistration, bukan registration
     if (this.serviceWorkerRegistration && "periodicSync" in this.serviceWorkerRegistration) {
       try {
         await this.serviceWorkerRegistration.periodicSync.register("sync-pending-donasi", {
           minInterval: 24 * 60 * 60 * 1000, // 1 day
         });
-        console.log("✅ Periodic sync registered");
+        if (window.APP_CONFIG?.DEBUG) {
+          console.log("✅ Periodic sync registered");
+        }
       } catch (error) {
-        console.log("❌ Periodic sync not supported:", error);
+        if (window.APP_CONFIG?.DEBUG) {
+          console.log("❌ Periodic sync not supported:", error);
+        }
       }
     } else {
-      console.log("⚠️ Periodic sync not available");
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("⚠️ Periodic sync not available");
+      }
     }
   }
 
@@ -291,7 +324,10 @@ class JimpitanPWA {
       };
 
       await store.add(pendingItem);
-      console.log("💾 Data saved for offline sync:", pendingItem);
+      
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("💾 Data saved for offline sync:", pendingItem);
+      }
 
       // Register background sync
       if (this.serviceWorkerRegistration && "sync" in this.serviceWorkerRegistration) {
@@ -313,7 +349,9 @@ class JimpitanPWA {
       const store = transaction.objectStore("pendingData");
       const allData = await store.getAll();
 
-      console.log(`🔄 Syncing ${allData.length} offline items...`);
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log(`🔄 Syncing ${allData.length} offline items...`);
+      }
 
       for (const item of allData) {
         await this.syncItem(item);
@@ -332,9 +370,10 @@ class JimpitanPWA {
           endpoint = "/api/donasi";
           method = "POST";
           break;
-        // Add more types as needed
         default:
-          console.warn("Unknown sync type:", item.type);
+          if (window.APP_CONFIG?.DEBUG) {
+            console.warn("Unknown sync type:", item.type);
+          }
           return;
       }
 
@@ -347,9 +386,13 @@ class JimpitanPWA {
       if (response.ok) {
         // Remove from pending data
         await this.removePendingItem(item.id);
-        console.log("✅ Successfully synced:", item.id);
+        if (window.APP_CONFIG?.DEBUG) {
+          console.log("✅ Successfully synced:", item.id);
+        }
       } else {
-        console.error("❌ Sync failed for:", item.id);
+        if (window.APP_CONFIG?.DEBUG) {
+          console.error("❌ Sync failed for:", item.id);
+        }
       }
     } catch (error) {
       console.error("❌ Error syncing item:", error);
@@ -461,7 +504,9 @@ class JimpitanPWA {
 
   trackEvent(event, value) {
     // Analytics tracking
-    console.log(`📊 Event: ${event} = ${value}`);
+    if (window.APP_CONFIG?.DEBUG) {
+      console.log(`📊 Event: ${event} = ${value}`);
+    }
   }
 
   // Public methods
