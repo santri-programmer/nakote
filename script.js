@@ -5,38 +5,13 @@ const APP_LOGGER = window.AppLogger || console;
 // ======= DATA & INIT =======
 const kategoriDonatur = {
   kategori1: [
-    "Mas Ani",
-    "Pak Kholis",
-    "Pak Hasyim",
-    "Amat",
-    "Mbak Is",
-    "Dani",
-    "Pak Napi",
-    "Pak Ipin",
-    "Mas Agus BZ",
-    "Pak Fat",
-    "Pak Ropi",
-    "Mas Umam",
-    "Pak Kisman",
-    "Pak Yanto",
-    "Pak Pardi",
-    "Pak Salam",
-    "Pak Piyan",
-    "Pak Slamet",
-    "Pak Ibin",
-    "Idek",
-    "Pak Ngari",
-    "Pak Tukhin",
-    "Pak Rofiq",
-    "Pak Syafak",
-    "Pak Jubaidi",
-    "Mbak Kholis",
-    "Pak Kholiq",
-    "Pak Rokhan",
-    "Mas Agus",
-    "Mas Izin",
-    "Pak Abror",
-    "Mas Gustaf",
+    "Mas Ani", "Pak Kholis", "Pak Hasyim", "Amat", "Mbak Is", 
+    "Dani", "Pak Napi", "Pak Ipin", "Mas Agus BZ", "Pak Fat",
+    "Pak Ropi", "Mas Umam", "Pak Kisman", "Pak Yanto", "Pak Pardi",
+    "Pak Salam", "Pak Piyan", "Pak Slamet", "Pak Ibin", "Idek",
+    "Pak Ngari", "Pak Tukhin", "Pak Rofiq", "Pak Syafak", "Pak Jubaidi",
+    "Mbak Kholis", "Pak Kholiq", "Pak Rokhan", "Mas Agus", "Mas Izin",
+    "Pak Abror", "Mas Gustaf"
   ],
   kategori2: ["Pak A", "Pak B", "Pak C"],
   kategori3: ["Pak A", "Pak B", "Pak C"],
@@ -44,7 +19,7 @@ const kategoriDonatur = {
 
 const kategoriLabel = {
   kategori1: "RT Tengah",
-  kategori2: "RT Kulon",
+  kategori2: "RT Kulon", 
   kategori3: "RT Kidul",
 };
 
@@ -70,8 +45,10 @@ if (window.jimpitanPWA) {
 let cachedElements = {};
 
 document.addEventListener("DOMContentLoaded", () => {
-  APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
-
+  if (window.APP_CONFIG.DEBUG) {
+    APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
+  }
+  
   cachedElements = {
     tanggalHariIni: document.getElementById("tanggalHariIni"),
     notifikasi: document.getElementById("notifikasi"),
@@ -130,9 +107,7 @@ function setupEventListeners() {
 
   cachedElements.pemasukan.addEventListener(
     "input",
-    debounce(() => {
-      // Validasi input jika perlu
-    }, 300)
+    debounce(() => {}, 300)
   );
 }
 
@@ -145,7 +120,7 @@ function debounce(func, wait) {
   };
 }
 
-// load donatur ke dropdown - LOGIKA ASLI DIPERTAHANKAN
+// load donatur ke dropdown
 function muatDropdown(kategori = "kategori1") {
   const select = cachedElements.donatur;
   const names = kategoriDonatur[kategori];
@@ -167,16 +142,13 @@ function muatDropdown(kategori = "kategori1") {
 
     showNotification("✅ Semua donatur sudah diinput");
   } else {
-    // LOGIKA ASLI: Langsung pilih donatur pertama yang belum diinput
     donaturBelumDiinput.forEach((nama) => {
       const option = new Option(nama, nama);
       select.appendChild(option);
     });
 
-    // Auto-select yang pertama
     select.selectedIndex = 0;
 
-    // Focus ke input nominal
     setTimeout(() => {
       cachedElements.pemasukan.focus();
     }, 100);
@@ -226,23 +198,16 @@ function updateUploadButtonState() {
   const sudahUpload = sudahUploadHariIni[kategori];
   const adaData = dataDonasi.length > 0;
 
-  const shouldEnable =
-    (semuaSudahDiinput || adaData) && !sudahUpload && adaData;
+  const shouldEnable = (semuaSudahDiinput || adaData) && !sudahUpload && adaData;
 
   cachedElements.btnUpload.disabled = !shouldEnable;
 
   if (shouldEnable) {
     cachedElements.btnUpload.classList.remove("upload-disabled", "bg-gray-400");
-    cachedElements.btnUpload.classList.add(
-      "bg-green-600",
-      "hover:bg-green-700"
-    );
+    cachedElements.btnUpload.classList.add("bg-green-600", "hover:bg-green-700");
   } else {
     cachedElements.btnUpload.classList.add("upload-disabled", "bg-gray-400");
-    cachedElements.btnUpload.classList.remove(
-      "bg-green-600",
-      "hover:bg-green-700"
-    );
+    cachedElements.btnUpload.classList.remove("bg-green-600", "hover:bg-green-700");
   }
 
   if (sudahUpload) {
@@ -294,7 +259,7 @@ function tambahData() {
   }
 
   renderTabelTerurut(kategori);
-  muatDropdown(kategori); // Ini akan auto-select donatur berikutnya
+  muatDropdown(kategori);
 
   cachedElements.pemasukan.value = "";
   updateTotalDisplay();
@@ -329,26 +294,21 @@ function renderTabelTerurut(kategori) {
 
     const nominalCell = row.insertCell(1);
     nominalCell.className = "py-3 md:py-4 px-4 md:px-6 text-right font-mono";
-    nominalCell.textContent =
-      "Rp " + Number(item.nominal).toLocaleString("id-ID");
+    nominalCell.textContent = "Rp " + Number(item.nominal).toLocaleString("id-ID");
 
     const aksiCell = row.insertCell(2);
     aksiCell.className = "py-3 md:py-4 px-4 md:px-6 text-center";
 
     const editBtn = document.createElement("button");
     editBtn.innerHTML = '<i class="fas fa-edit"></i>';
-    editBtn.className =
-      "bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg transition duration-200 mx-1";
+    editBtn.className = "bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg transition duration-200 mx-1";
     editBtn.title = "Edit donasi";
-    editBtn.addEventListener("click", () =>
-      editRow(row, kategori, item.donatur)
-    );
+    editBtn.addEventListener("click", () => editRow(row, kategori, item.donatur));
     aksiCell.appendChild(editBtn);
 
     const deleteBtn = document.createElement("button");
     deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-    deleteBtn.className =
-      "bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition duration-200 mx-1";
+    deleteBtn.className = "bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition duration-200 mx-1";
     deleteBtn.title = "Hapus donasi";
     deleteBtn.addEventListener("click", () => hapusRow(kategori, item.donatur));
     aksiCell.appendChild(deleteBtn);
@@ -364,8 +324,7 @@ function updateTotalDisplay() {
     total += Number(text);
   });
 
-  cachedElements.totalDonasi.textContent =
-    "Rp " + total.toLocaleString("id-ID");
+  cachedElements.totalDonasi.textContent = "Rp " + total.toLocaleString("id-ID");
 }
 
 function editRow(row, kategori, donaturLama) {
@@ -381,19 +340,16 @@ function editRow(row, kategori, donaturLama) {
 
   const saveBtn = document.createElement("button");
   saveBtn.innerHTML = '<i class="fas fa-check"></i>';
-  saveBtn.className =
-    "bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg mx-1 transition duration-200";
+  saveBtn.className = "bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg mx-1 transition duration-200";
   saveBtn.addEventListener("click", () => saveRow(row, kategori, donaturLama));
   aksiCell.appendChild(saveBtn);
 
   const cancelBtn = document.createElement("button");
   cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
-  cancelBtn.className =
-    "bg-gray-500 hover:bg-gray-600 text-white p-2 rounded-lg mx-1 transition duration-200";
+  cancelBtn.className = "bg-gray-500 hover:bg-gray-600 text-white p-2 rounded-lg mx-1 transition duration-200";
   cancelBtn.addEventListener("click", () => renderTabelTerurut(kategori));
   aksiCell.appendChild(cancelBtn);
 
-  // Focus on input
   setTimeout(() => {
     const editInput = document.getElementById("editInput");
     if (editInput) editInput.focus();
@@ -403,10 +359,7 @@ function editRow(row, kategori, donaturLama) {
 function saveRow(row, kategori, donaturLama) {
   const newValue = document.getElementById("editInput").value;
   if (newValue === "" || newValue <= 0) {
-    showNotification(
-      "Nominal tidak boleh kosong dan harus lebih dari 0",
-      false
-    );
+    showNotification("Nominal tidak boleh kosong dan harus lebih dari 0", false);
     return;
   }
 
@@ -441,17 +394,13 @@ function hapusRow(kategori, donatur) {
 
 function hapusData() {
   const kategori = cachedElements.kategoriDonatur.value;
-
+  
   if (dataDonasi.length === 0) {
     showNotification("Tidak ada data untuk dihapus", false);
     return;
   }
 
-  if (
-    !confirm(
-      `Apakah Anda yakin ingin menghapus semua data untuk ${kategoriLabel[kategori]}?`
-    )
-  ) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus semua data untuk ${kategoriLabel[kategori]}?`)) {
     return;
   }
 
@@ -460,9 +409,7 @@ function hapusData() {
   muatDropdown(kategori);
   renderTabelTerurut(kategori);
   updateTotalDisplay();
-  showNotification(
-    `✅ Semua data untuk ${kategoriLabel[kategori]} berhasil dihapus`
-  );
+  showNotification(`✅ Semua data untuk ${kategoriLabel[kategori]} berhasil dihapus`);
   updateUploadButtonState();
 }
 
@@ -480,8 +427,7 @@ function getLastUploadDate() {
 function showNotification(message, isSuccess = true) {
   const notif = cachedElements.notifikasi;
   notif.textContent = message;
-  notif.className =
-    "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300 opacity-100 show";
+  notif.className = "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300 opacity-100 show";
 
   if (isSuccess) {
     notif.classList.add("bg-green-50", "border-green-200", "text-green-700");
@@ -493,8 +439,7 @@ function showNotification(message, isSuccess = true) {
     notif.classList.remove("show");
     setTimeout(() => {
       notif.textContent = "";
-      notif.className =
-        "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300";
+      notif.className = "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300";
     }, 300);
   }, 3000);
 }
@@ -503,8 +448,7 @@ function showNotification(message, isSuccess = true) {
 function showUploadStatus(message, isSuccess = null) {
   const status = cachedElements.uploadStatus;
   status.textContent = message;
-  status.className =
-    "text-center p-4 rounded-xl transition-all duration-300 opacity-100 show";
+  status.className = "text-center p-4 rounded-xl transition-all duration-300 opacity-100 show";
 
   if (isSuccess === true) {
     status.classList.add("bg-green-50", "border-green-200", "text-green-700");
@@ -542,8 +486,7 @@ async function uploadToDatabase() {
     // Show loading state
     showUploadStatus("🔄 Mengupload data ke server...", "info");
     cachedElements.btnUpload.disabled = true;
-    cachedElements.btnUpload.innerHTML =
-      '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    cachedElements.btnUpload.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
     let successCount = 0;
     let errorCount = 0;
@@ -557,12 +500,14 @@ async function uploadToDatabase() {
           tanggal_input: new Date().toISOString(),
         };
 
-        APP_LOGGER.log("📤 Upload payload:", payload);
+        if (window.APP_CONFIG.DEBUG) {
+          APP_LOGGER.log("📤 Upload payload:", payload);
+        }
 
         const res = await fetch(`${API_URL}/donasi`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+          headers: { 
+            "Content-Type": "application/json"
           },
           body: JSON.stringify(payload),
         });
@@ -573,20 +518,18 @@ async function uploadToDatabase() {
           const errData = await res.json();
           APP_LOGGER.error(`❌ Upload failed for ${item.donatur}:`, errData);
           errorCount++;
-
+          
           if (res.status === 400) {
             throw new Error(`Data tidak valid: ${errData.error}`);
           } else if (res.status === 500) {
             throw new Error(`Server error: ${errData.error}`);
           } else {
-            throw new Error(
-              `Upload gagal: ${errData.error || "Unknown error"}`
-            );
+            throw new Error(`Upload gagal: ${errData.error || 'Unknown error'}`);
           }
         }
 
-        // Small delay between requests to avoid overwhelming server
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
       } catch (itemError) {
         APP_LOGGER.error(`❌ Error uploading ${item.donatur}:`, itemError);
         errorCount++;
@@ -612,6 +555,7 @@ async function uploadToDatabase() {
       muatDropdown(kategoriKey);
       renderTabelTerurut(kategoriKey);
       updateTotalDisplay();
+      
     } else if (successCount > 0) {
       // Partial success
       showUploadStatus(
@@ -622,22 +566,21 @@ async function uploadToDatabase() {
       // All failed
       throw new Error(`Semua upload gagal (${errorCount} items)`);
     }
+
   } catch (err) {
     APP_LOGGER.error("❌ Upload error:", err);
-
+    
     // Enhanced error handling
     let errorMessage = err.message;
-    if (err.name === "TypeError" && err.message.includes("Failed to fetch")) {
-      errorMessage =
-        "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      errorMessage = "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
     }
-
+    
     showUploadStatus(`❌ ${errorMessage}`, false);
   } finally {
     updateUploadButtonState();
     cachedElements.btnUpload.disabled = false;
-    cachedElements.btnUpload.innerHTML =
-      '<i class="fas fa-upload"></i> Upload Data';
+    cachedElements.btnUpload.innerHTML = '<i class="fas fa-upload"></i> Upload Data';
   }
 }
 
