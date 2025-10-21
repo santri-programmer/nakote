@@ -4,6 +4,7 @@ class JimpitanPWA {
     this.deferredPrompt = null;
     this.isInstalled = false;
     this.isOnline = navigator.onLine;
+    this.serviceWorkerRegistration = null;
     this.init();
   }
 
@@ -32,12 +33,12 @@ class JimpitanPWA {
   async registerServiceWorker() {
     if ("serviceWorker" in navigator) {
       try {
-        const registration = await navigator.serviceWorker.register("/sw.js");
-        console.log("🟢 Service Worker registered:", registration);
+        this.serviceWorkerRegistration = await navigator.serviceWorker.register("/nakote/sw.js");
+        console.log("🟢 Service Worker registered:", this.serviceWorkerRegistration);
 
         // Check for updates
-        registration.addEventListener("updatefound", () => {
-          const newWorker = registration.installing;
+        this.serviceWorkerRegistration.addEventListener("updatefound", () => {
+          const newWorker = this.serviceWorkerRegistration.installing;
           console.log("🔄 New Service Worker found:", newWorker);
 
           newWorker.addEventListener("statechange", () => {
@@ -258,15 +259,18 @@ class JimpitanPWA {
   }
 
   async setupPeriodicSync() {
-    if ("periodicSync" in registration) {
+    // PERBAIKAN: Gunakan this.serviceWorkerRegistration, bukan registration
+    if (this.serviceWorkerRegistration && "periodicSync" in this.serviceWorkerRegistration) {
       try {
-        await registration.periodicSync.register("sync-pending-donasi", {
+        await this.serviceWorkerRegistration.periodicSync.register("sync-pending-donasi", {
           minInterval: 24 * 60 * 60 * 1000, // 1 day
         });
         console.log("✅ Periodic sync registered");
       } catch (error) {
         console.log("❌ Periodic sync not supported:", error);
       }
+    } else {
+      console.log("⚠️ Periodic sync not available");
     }
   }
 
@@ -290,9 +294,8 @@ class JimpitanPWA {
       console.log("💾 Data saved for offline sync:", pendingItem);
 
       // Register background sync
-      if ("serviceWorker" in navigator && "SyncManager" in window) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.sync.register("sync-pending-data");
+      if (this.serviceWorkerRegistration && "sync" in this.serviceWorkerRegistration) {
+        await this.serviceWorkerRegistration.sync.register("sync-pending-data");
       }
 
       return true;
@@ -390,7 +393,7 @@ class JimpitanPWA {
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification(title, {
         body: message,
-        icon: "/icons/icon-192x192.png",
+        icon: "/nakote/icons/icon-192x192.png",
       });
     } else {
       // Fallback to custom notification
