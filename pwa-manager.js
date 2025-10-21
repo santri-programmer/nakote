@@ -475,7 +475,7 @@ class JimpitanPWA {
     // Auto remove after 5 seconds
     setTimeout(() => {
       if (notification.parentElement) {
-        notification.style.transform = "translateX(100%)";
+        notification.style.transform = "translate-x-full";
         setTimeout(() => notification.remove(), 300);
       }
     }, 5000);
