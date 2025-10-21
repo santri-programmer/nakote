@@ -4,17 +4,17 @@ const API_CACHE_NAME = "jimpitan-api-v2";
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/style.css",
-  "/script.js",
-  "/admin/dashboard.html",
-  "/admin/admin.js",
-  "/admin/admin.css",
-  "/manifest.json",
-  "/icons/icon-72x72.png",
-  "/icons/icon-192x192.png",
-  "/icons/icon-512x512.png",
+  "/nakote/",
+  "/nakote/index.html",
+  "/nakote/style.css",
+  "/nakote/script.js",
+  "/nakote/config.js",
+  "/nakote/pwa-manager.js",
+  "/nakote/manifest.json",
+  "/nakote/offline.html",
+  "/nakote/icons/icon-72x72.png",
+  "/nakote/icons/icon-192x192.png",
+  "/nakote/icons/icon-512x512.png",
 ];
 
 // External resources to cache
@@ -150,7 +150,7 @@ async function handleStaticRequest(request) {
 
     // For navigation requests, return offline page
     if (request.mode === "navigate") {
-      return caches.match("/offline.html");
+      return caches.match("/nakote/offline.html");
     }
 
     return new Response("Offline", {
@@ -164,44 +164,36 @@ async function handleStaticRequest(request) {
 self.addEventListener("sync", (event) => {
   console.log("🔄 Background sync triggered:", event.tag);
 
-  if (event.tag === "sync-pending-donasi") {
-    event.waitUntil(syncPendingDonasi());
+  if (event.tag === "sync-pending-data") {
+    event.waitUntil(syncPendingData());
   }
 });
 
-// Sync pending donations when back online
-async function syncPendingDonasi() {
+// Sync pending data when back online
+async function syncPendingData() {
   try {
-    // Get pending donations from IndexedDB or localStorage
-    const pendingDonasi = await getPendingDonasi();
-    console.log(`🔄 Syncing ${pendingDonasi.length} pending donations...`);
+    // Get pending data from IndexedDB
+    const pendingData = await getPendingData();
+    console.log(`🔄 Syncing ${pendingData.length} pending items...`);
 
-    for (const donasi of pendingDonasi) {
+    for (const item of pendingData) {
       try {
-        const response = await fetch("/api/donasi", {
-          method: "POST",
+        const response = await fetch(item.data.endpoint || "/api/donasi", {
+          method: item.data.method || "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Offline-Sync": "true",
           },
-          body: JSON.stringify(donasi.data),
+          body: JSON.stringify(item.data),
         });
 
         if (response.ok) {
-          console.log("✅ Successfully synced donation:", donasi.id);
-          await removePendingDonasi(donasi.id);
-
-          // Show notification
-          self.registration.showNotification("Sync Berhasil", {
-            body: `Donasi ${donasi.data.nama_donatur} berhasil disinkronisasi`,
-            icon: "/icons/icon-192x192.png",
-            badge: "/icons/icon-72x72.png",
-          });
+          console.log("✅ Successfully synced:", item.id);
+          await removePendingItem(item.id);
         } else {
-          console.error("❌ Sync failed for donation:", donasi.id);
+          console.error("❌ Sync failed for:", item.id);
         }
       } catch (error) {
-        console.error("❌ Error syncing donation:", error);
+        console.error("❌ Error syncing item:", error);
       }
     }
   } catch (error) {
@@ -209,23 +201,15 @@ async function syncPendingDonasi() {
   }
 }
 
-// Helper functions for pending donations
-async function getPendingDonasi() {
+// Helper functions for IndexedDB
+async function getPendingData() {
   return new Promise((resolve) => {
-    // Using IndexedDB for better offline storage
-    const request = indexedDB.open("JimpitanDB", 1);
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains("pendingDonasi")) {
-        db.createObjectStore("pendingDonasi", { keyPath: "id" });
-      }
-    };
+    const request = indexedDB.open("JimpitanPWA", 2);
 
     request.onsuccess = (event) => {
       const db = event.target.result;
-      const transaction = db.transaction(["pendingDonasi"], "readonly");
-      const store = transaction.objectStore("pendingDonasi");
+      const transaction = db.transaction(["pendingData"], "readonly");
+      const store = transaction.objectStore("pendingData");
       const getAll = store.getAll();
 
       getAll.onsuccess = () => resolve(getAll.result || []);
@@ -235,14 +219,14 @@ async function getPendingDonasi() {
   });
 }
 
-async function removePendingDonasi(id) {
+async function removePendingItem(id) {
   return new Promise((resolve) => {
-    const request = indexedDB.open("JimpitanDB", 1);
+    const request = indexedDB.open("JimpitanPWA", 2);
 
     request.onsuccess = (event) => {
       const db = event.target.result;
-      const transaction = db.transaction(["pendingDonasi"], "readwrite");
-      const store = transaction.objectStore("pendingDonasi");
+      const transaction = db.transaction(["pendingData"], "readwrite");
+      const store = transaction.objectStore("pendingData");
       const deleteReq = store.delete(id);
 
       deleteReq.onsuccess = () => resolve(true);
@@ -252,49 +236,3 @@ async function removePendingDonasi(id) {
     request.onerror = () => resolve(false);
   });
 }
-
-// Push notifications
-self.addEventListener("push", (event) => {
-  if (!event.data) return;
-
-  const data = event.data.json();
-  const options = {
-    body: data.body,
-    icon: "/icons/icon-192x192.png",
-    badge: "/icons/icon-72x72.png",
-    vibrate: [100, 50, 100],
-    data: data.url,
-    actions: [
-      {
-        action: "open",
-        title: "Buka Aplikasi",
-      },
-      {
-        action: "close",
-        title: "Tutup",
-      },
-    ],
-  };
-
-  event.waitUntil(self.registration.showNotification(data.title, options));
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
-  if (event.action === "open") {
-    event.waitUntil(
-      clients.matchAll({ type: "window" }).then((clientList) => {
-        for (const client of clientList) {
-          if (client.url === "/" && "focus" in client) {
-            return client.focus();
-          }
-        }
-
-        if (clients.openWindow) {
-          return clients.openWindow("/");
-        }
-      })
-    );
-  }
-});
