@@ -85,7 +85,7 @@ function initUI() {
 
 function setupEventListeners() {
   cachedElements.btnTambah.addEventListener("click", tambahData);
-  cachedElements.btnUpload.addEventListener("click", uploadToDatabase);
+  cachedElements.btnUpload.addEventListener("click", handleUpload);
   cachedElements.btnHapus.addEventListener("click", hapusData);
 
   cachedElements.kategoriDonatur.addEventListener("change", function () {
@@ -466,8 +466,8 @@ const kategoriMapping = {
   kategori3: "RT Kidul",
 };
 
-// Enhanced upload function dengan better error handling
-async function uploadToDatabase() {
+// Main upload handler
+async function handleUpload() {
   const kategoriKey = cachedElements.kategoriDonatur.value;
   const kategoriValue = kategoriMapping[kategoriKey];
 
