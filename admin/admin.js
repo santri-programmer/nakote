@@ -7,6 +7,29 @@ let reportCache = new Map();
 let domCache = new Map();
 
 // Security: Hide debug functions in production
+const safeApiRequest = async (endpoint, options = {}) => {
+  if (window.ApiHelper && typeof window.ApiHelper.request === 'function') {
+    return window.ApiHelper.request(endpoint, options);
+  } else if (window.safeApiRequest) {
+    return window.safeApiRequest(endpoint, options);
+  } else {
+    // Fallback ke fetch langsung
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+};
+
 if (!window.APP_CONFIG?.DEBUG) {
   // Remove debug utilities from global scope
   const originalConsole = console;
