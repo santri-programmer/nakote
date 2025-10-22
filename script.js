@@ -188,16 +188,21 @@ function setupEventListeners() {
     }
   });
 
-  cachedElements.kategoriDonatur.addEventListener("change", function () {
-    const kategori = this.value;
-    muatDropdown(kategori);
-    dataDonasi = [];
-    const tbody = cachedElements.tabelDonasi.querySelector("tbody");
-    tbody.innerHTML = "";
-    updateTotalDisplay();
-    checkUploadStatus(); // 🔥 Check status setiap ganti kategori
-    updateUploadButtonState();
-  });
+ cachedElements.kategoriDonatur.addEventListener("change", function () {
+  const kategori = this.value;
+  muatDropdown(kategori);
+  dataDonasi = [];
+  const tbody = cachedElements.tabelDonasi.querySelector("tbody");
+  tbody.innerHTML = "";
+  updateTotalDisplay();
+  checkUploadStatus();
+  updateUploadButtonState();
+  
+  // 🔥 PERBAIKAN: Auto-focus ke input nominal setelah ganti kategori
+  setTimeout(() => {
+    cachedElements.pemasukan.focus();
+  }, 150);
+});
 
   cachedElements.pemasukan.addEventListener("keypress", function (e) {
     if (e.key === "Enter") {
@@ -317,6 +322,14 @@ function muatDropdown(kategori = "kategori1") {
   const cacheKey = `dropdown-${kategori}`;
   if (domCache.has(cacheKey)) {
     cachedElements.donatur.innerHTML = domCache.get(cacheKey);
+    
+    // Auto-select pertama setelah render dari cache
+    setTimeout(() => {
+      if (cachedElements.donatur.options.length > 0) {
+        cachedElements.donatur.selectedIndex = 0;
+        cachedElements.pemasukan.focus();
+      }
+    }, 50);
     return;
   }
 
@@ -337,15 +350,17 @@ function muatDropdown(kategori = "kategori1") {
 
     showNotification("✅ Semua donatur sudah diinput");
   } else {
-    html = '<option value="">Pilih Donatur</option>';
-    html += donaturBelumDiinput
+    // 🔥 PERBAIKAN: Langsung tampilkan nama donatur, tanpa "Pilih Donatur"
+    html = donaturBelumDiinput
       .map((nama) => `<option value="${nama}">${nama}</option>`)
       .join("");
 
-    select.selectedIndex = 0;
-
+    // Auto-select donatur pertama
     setTimeout(() => {
-      cachedElements.pemasukan.focus();
+      if (cachedElements.donatur.options.length > 0) {
+        cachedElements.donatur.selectedIndex = 0;
+        cachedElements.pemasukan.focus();
+      }
     }, 100);
 
     cachedElements.btnTambah.disabled = false;
@@ -429,8 +444,9 @@ function tambahData() {
   const nominal = cachedElements.pemasukan.value;
   const kategori = cachedElements.kategoriDonatur.value;
 
-  if (!donatur || donatur === "" || !nominal) {
-    showNotification("Nama dan nominal tidak boleh kosong", false);
+  // 🔥 PERBAIKAN: Validasi disesuaikan karena sekarang tidak ada opsi kosong
+  if (!donatur || !nominal) {
+    showNotification("Nominal tidak boleh kosong", false);
     return;
   }
 
@@ -455,12 +471,13 @@ function tambahData() {
   }
 
   renderTabelTerurut(kategori);
-  muatDropdown(kategori);
+  muatDropdown(kategori); // 🔥 Ini akan refresh dropdown
 
   cachedElements.pemasukan.value = "";
   updateTotalDisplay();
   updateUploadButtonState();
 
+  // Auto-focus ke input nominal setelah tambah data
   setTimeout(() => {
     cachedElements.pemasukan.focus();
   }, 100);
