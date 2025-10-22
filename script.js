@@ -68,6 +68,12 @@ const kategoriLabel = {
   kategori3: "RT Kidul",
 };
 
+const kategoriMapping = {
+  kategori1: "RT Tengah",
+  kategori2: "RT Kulon",
+  kategori3: "RT Kidul",
+};
+
 let dataDonasi = [];
 let sudahUploadHariIni = {
   kategori1: false,
@@ -88,9 +94,8 @@ if (window.jimpitanPWA) {
 }
 
 let cachedElements = {};
-
-// Cache untuk performance
 let domCache = new Map();
+let periodicCheckInterval = null;
 
 // Wait for DOM to be fully loaded
 if (document.readyState === 'loading') {
@@ -102,18 +107,39 @@ if (document.readyState === 'loading') {
 function initializeApp() {
   const startTime = Date.now();
   
-  // Safety check
+  // Safety check - pastikan dependencies sudah loaded
   if (!window.APP_CONFIG) {
-    console.error('❌ APP_CONFIG not found.');
+    console.error('❌ APP_CONFIG not found. Make sure config.js is loaded first.');
     showNotification('Configuration error. Please refresh the page.', false);
     return;
   }
   
+  if (window.APP_CONFIG?.DEBUG) {
+    APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
+    APP_LOGGER.log("🔧 ApiHelper available:", !!window.ApiHelper);
+    APP_LOGGER.log("🔧 safeApiRequest available:", !!window.safeApiRequest);
+  }
+  
+  cachedElements = {
+    tanggalHariIni: document.getElementById("tanggalHariIni"),
+    notifikasi: document.getElementById("notifikasi"),
+    kategoriDonatur: document.getElementById("kategoriDonatur"),
+    donatur: document.getElementById("donatur"),
+    pemasukan: document.getElementById("pemasukan"),
+    btnTambah: document.getElementById("btnTambah"),
+    btnUpload: document.getElementById("btnUpload"),
+    btnHapus: document.getElementById("btnHapus"),
+    tabelDonasi: document.getElementById("tabelDonasi"),
+    totalDonasi: document.getElementById("totalDonasi"),
+    uploadStatus: document.getElementById("uploadStatus"),
+    uploadInfo: document.getElementById("uploadInfo"),
+  };
+
   // Initialize UI
   initUI();
   setupEventListeners();
-  checkUploadStatus(); // Check status saat load
-  startPeriodicStatusCheck(); // 🔥 NEW: Start periodic checking
+  checkUploadStatus();
+  startPeriodicStatusCheck(); // 🔥 Start periodic checking
   
   if (window.APP_CONFIG?.DEBUG) {
     window.AppLogger.performance("App Initialization", startTime);
@@ -151,6 +177,14 @@ function setupEventListeners() {
       const donatur = row.cells[0].textContent;
       const kategori = cachedElements.kategoriDonatur.value;
       hapusRow(kategori, donatur);
+    } else if (e.target.closest(".save-btn")) {
+      const row = e.target.closest("tr");
+      const donatur = row.cells[0].textContent;
+      const kategori = cachedElements.kategoriDonatur.value;
+      saveRow(row, kategori, donatur);
+    } else if (e.target.closest(".cancel-btn")) {
+      const kategori = cachedElements.kategoriDonatur.value;
+      renderTabelTerurut(kategori);
     }
   });
 
@@ -161,13 +195,20 @@ function setupEventListeners() {
     const tbody = cachedElements.tabelDonasi.querySelector("tbody");
     tbody.innerHTML = "";
     updateTotalDisplay();
-    checkUploadStatus();
+    checkUploadStatus(); // 🔥 Check status setiap ganti kategori
     updateUploadButtonState();
   });
 
   cachedElements.pemasukan.addEventListener("keypress", function (e) {
     if (e.key === "Enter") {
       tambahData();
+    }
+  });
+
+  // Handle page visibility change - refresh status ketika tab aktif
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      checkUploadStatus();
     }
   });
 
@@ -187,6 +228,88 @@ function debounce(func, wait) {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
+}
+
+// 🔥 REAL-TIME UPLOAD STATUS CHECKING
+async function checkUploadStatus() {
+  const kategori = cachedElements.kategoriDonatur.value;
+  const kategoriValue = kategoriMapping[kategori];
+
+  try {
+    // Check status dari server - REAL TIME
+    const response = await safeApiRequest(`/upload-status?kategori=${encodeURIComponent(kategoriValue)}`);
+    
+    if (response.already_uploaded) {
+      sudahUploadHariIni[kategori] = true;
+      showUploadStatus(
+        `❌ Data ${kategoriLabel[kategori]} hari ini sudah diupload. Upload hanya dapat dilakukan sekali per hari.`,
+        false
+      );
+      
+      // Nonaktifkan input jika sudah diupload
+      cachedElements.btnTambah.disabled = true;
+      cachedElements.pemasukan.disabled = true;
+      cachedElements.btnTambah.querySelector("#btnText").textContent = "Terkunci";
+      
+    } else {
+      sudahUploadHariIni[kategori] = false;
+      showUploadStatus(
+        `✅ Siap untuk upload data ${kategoriLabel[kategori]}`,
+        true
+      );
+      
+      // Aktifkan input jika belum diupload
+      cachedElements.btnTambah.disabled = false;
+      cachedElements.pemasukan.disabled = false;
+      cachedElements.btnTambah.querySelector("#btnText").textContent = "Tambah";
+    }
+    
+    if (window.APP_CONFIG?.DEBUG) {
+      console.log(`🔍 Upload Status ${kategoriLabel[kategori]}:`, response.already_uploaded);
+    }
+    
+  } catch (error) {
+    console.error("Error checking upload status:", error);
+    
+    // Fallback ke local storage jika server error
+    const lastUploadDate = getLastUploadDate();
+    const today = new Date().toISOString().split("T")[0];
+
+    if (lastUploadDate[kategori] === today) {
+      sudahUploadHariIni[kategori] = true;
+      showUploadStatus(
+        `❌ Data ${kategoriLabel[kategori]} hari ini sudah diupload (local).`,
+        false
+      );
+    } else {
+      sudahUploadHariIni[kategori] = false;
+      showUploadStatus(
+        `✅ Siap untuk upload data ${kategoriLabel[kategori]}`,
+        true
+      );
+    }
+  }
+
+  updateUploadButtonState();
+}
+
+// 🔥 PERIODIC STATUS CHECK - Real-time sync across devices
+function startPeriodicStatusCheck() {
+  // Clear existing interval jika ada
+  if (periodicCheckInterval) {
+    clearInterval(periodicCheckInterval);
+  }
+  
+  // Check status setiap 30 detik
+  periodicCheckInterval = setInterval(() => {
+    if (!document.hidden) { // Hanya check jika tab aktif
+      checkUploadStatus();
+      
+      if (window.APP_CONFIG?.DEBUG) {
+        console.log("🔄 Periodic status check executed");
+      }
+    }
+  }, 30000); // 30 detik
 }
 
 // load donatur ke dropdown dengan caching
@@ -214,7 +337,8 @@ function muatDropdown(kategori = "kategori1") {
 
     showNotification("✅ Semua donatur sudah diinput");
   } else {
-    html = donaturBelumDiinput
+    html = '<option value="">Pilih Donatur</option>';
+    html += donaturBelumDiinput
       .map((nama) => `<option value="${nama}">${nama}</option>`)
       .join("");
 
@@ -242,96 +366,49 @@ function muatDropdown(kategori = "kategori1") {
   updateUploadButtonState();
 }
 
-// 🔥 NEW: Periodic check untuk real-time sync
-function startPeriodicStatusCheck() {
-  // Check status setiap 30 detik
-  setInterval(() => {
-    if (!document.hidden) { // Hanya check jika tab aktif
-      checkUploadStatus();
-    }
-  }, 30000);
-}
-
-// Check upload status dengan caching
-async function checkUploadStatus() {
-  const kategori = cachedElements.kategoriDonatur.value;
-  const kategoriValue = kategoriMapping[kategori];
-
-  try {
-    // Check status dari server
-    const response = await safeApiRequest(`/upload-status?kategori=${encodeURIComponent(kategoriValue)}`);
-    
-    if (response.already_uploaded) {
-      sudahUploadHariIni[kategori] = true;
-      showUploadStatus(
-        `❌ Data ${kategoriLabel[kategori]} hari ini sudah diupload. Upload hanya dapat dilakukan sekali per hari.`,
-        false
-      );
-    } else {
-      sudahUploadHariIni[kategori] = false;
-      showUploadStatus(
-        `✅ Siap untuk upload data ${kategoriLabel[kategori]}`,
-        true
-      );
-    }
-  } catch (error) {
-    console.error("Error checking upload status:", error);
-    // Fallback ke local storage jika server error
-    const lastUploadDate = getLastUploadDate();
-    const today = new Date().toISOString().split("T")[0];
-
-    if (lastUploadDate[kategori] === today) {
-      sudahUploadHariIni[kategori] = true;
-      showUploadStatus(
-        `❌ Data ${kategoriLabel[kategori]} hari ini sudah diupload (local).`,
-        false
-      );
-    } else {
-      sudahUploadHariIni[kategori] = false;
-      showUploadStatus(
-        `✅ Siap untuk upload data ${kategoriLabel[kategori]}`,
-        true
-      );
-    }
-  }
-
-  updateUploadButtonState();
-}
-
 function updateUploadButtonState() {
   const kategori = cachedElements.kategoriDonatur.value;
   const semuaSudahDiinput = semuaDonaturTerinput(kategori);
   const sudahUpload = sudahUploadHariIni[kategori];
   const adaData = dataDonasi.length > 0;
 
-  const shouldEnable =
-    (semuaSudahDiinput || adaData) && !sudahUpload && adaData;
+  const shouldEnable = (semuaSudahDiinput || adaData) && !sudahUpload;
 
   cachedElements.btnUpload.disabled = !shouldEnable;
 
   if (shouldEnable) {
-    cachedElements.btnUpload.classList.remove("upload-disabled", "bg-gray-400");
-    cachedElements.btnUpload.classList.add(
-      "bg-green-600",
-      "hover:bg-green-700"
-    );
+    cachedElements.btnUpload.classList.remove("upload-disabled", "bg-gray-400", "cursor-not-allowed");
+    cachedElements.btnUpload.classList.add("bg-green-600", "hover:bg-green-700", "cursor-pointer");
+    cachedElements.btnUpload.title = "Upload data ke server";
   } else {
-    cachedElements.btnUpload.classList.add("upload-disabled", "bg-gray-400");
-    cachedElements.btnUpload.classList.remove(
-      "bg-green-600",
-      "hover:bg-green-700"
-    );
+    cachedElements.btnUpload.classList.add("upload-disabled", "bg-gray-400", "cursor-not-allowed");
+    cachedElements.btnUpload.classList.remove("bg-green-600", "hover:bg-green-700", "cursor-pointer");
+    
+    if (sudahUpload) {
+      cachedElements.btnUpload.title = "Data sudah diupload hari ini";
+    } else if (!semuaSudahDiinput && !adaData) {
+      cachedElements.btnUpload.title = "Tambah data terlebih dahulu";
+    } else {
+      cachedElements.btnUpload.title = "Upload data ke server";
+    }
   }
 
+  // Update info text
   if (sudahUpload) {
-    cachedElements.uploadInfo.textContent = `Anda sudah melakukan upload hari ini untuk ${kategoriLabel[kategori]}. Upload hanya dapat dilakukan sekali per hari.`;
-  } else if (!semuaSudahDiinput) {
+    cachedElements.uploadInfo.textContent = `❌ Data ${kategoriLabel[kategori]} sudah diupload hari ini. Upload hanya dapat dilakukan sekali per hari.`;
+    cachedElements.uploadInfo.className = "text-red-600 text-sm text-center";
+  } else if (!semuaSudahDiinput && !adaData) {
     const totalDonatur = kategoriDonatur[kategori].length;
     const sudahDiinput = donaturTerinput[kategori].size;
     const sisa = totalDonatur - sudahDiinput;
-    cachedElements.uploadInfo.textContent = `${sisa} donatur belum diinput. Upload akan aktif setelah semua donatur diinput.`;
+    cachedElements.uploadInfo.textContent = `📝 ${sisa} donatur belum diinput. Upload akan aktif setelah semua donatur diinput atau ada data.`;
+    cachedElements.uploadInfo.className = "text-amber-600 text-sm text-center";
   } else if (!adaData) {
-    cachedElements.uploadInfo.textContent = "Tidak ada data untuk diupload.";
+    cachedElements.uploadInfo.textContent = "📝 Tidak ada data untuk diupload. Tambah data terlebih dahulu.";
+    cachedElements.uploadInfo.className = "text-amber-600 text-sm text-center";
+  } else {
+    cachedElements.uploadInfo.textContent = `✅ Data siap untuk diupload. ${dataDonasi.length} data akan dikirim ke server.`;
+    cachedElements.uploadInfo.className = "text-green-600 text-sm text-center";
   }
 }
 
@@ -342,6 +419,12 @@ function semuaDonaturTerinput(kategori) {
 }
 
 function tambahData() {
+  // 🔥 Cek status upload dulu sebelum tambah data
+  if (sudahUploadHariIni[cachedElements.kategoriDonatur.value]) {
+    showNotification("❌ Data sudah diupload hari ini. Tidak dapat menambah data.", false);
+    return;
+  }
+
   const donatur = cachedElements.donatur.value;
   const nominal = cachedElements.pemasukan.value;
   const kategori = cachedElements.kategoriDonatur.value;
@@ -402,17 +485,23 @@ function renderTabelTerurut(kategori) {
   // Build HTML string untuk performance
   let html = "";
   sortedData.forEach((item, index) => {
+    const isLocked = sudahUploadHariIni[kategori];
+    
     html += `
-      <tr class="table-row">
+      <tr class="table-row ${isLocked ? 'opacity-60' : ''}">
         <td class="py-3 md:py-4 px-4 md:px-6">${item.donatur}</td>
         <td class="py-3 md:py-4 px-4 md:px-6 text-right font-mono">Rp ${Number(
           item.nominal
         ).toLocaleString("id-ID")}</td>
         <td class="py-3 md:py-4 px-4 md:px-6 text-center">
-          <button class="edit-btn bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg transition duration-200 mx-1" title="Edit donasi">
+          <button class="edit-btn bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg transition duration-200 mx-1 ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}" 
+                  title="${isLocked ? 'Data terkunci - sudah diupload' : 'Edit donasi'}" 
+                  ${isLocked ? 'disabled' : ''}>
             <i class="fas fa-edit"></i>
           </button>
-          <button class="delete-btn bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition duration-200 mx-1" title="Hapus donasi">
+          <button class="delete-btn bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition duration-200 mx-1 ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}" 
+                  title="${isLocked ? 'Data terkunci - sudah diupload' : 'Hapus donasi'}" 
+                  ${isLocked ? 'disabled' : ''}>
             <i class="fas fa-trash"></i>
           </button>
         </td>
@@ -438,6 +527,12 @@ function updateTotalDisplay() {
 }
 
 function editRow(row, kategori, donaturLama) {
+  // 🔥 Cek status upload sebelum edit
+  if (sudahUploadHariIni[kategori]) {
+    showNotification("❌ Data sudah diupload. Tidak dapat mengedit.", false);
+    return;
+  }
+
   const nominalCell = row.cells[1];
   const aksiCell = row.cells[2];
   const currentNominal = nominalCell.textContent.replace(/[Rp\s.]/g, "");
@@ -455,17 +550,12 @@ function editRow(row, kategori, donaturLama) {
     </button>
   `;
 
-  // Add event listeners
-  aksiCell
-    .querySelector(".save-btn")
-    .addEventListener("click", () => saveRow(row, kategori, donaturLama));
-  aksiCell
-    .querySelector(".cancel-btn")
-    .addEventListener("click", () => renderTabelTerurut(kategori));
-
   setTimeout(() => {
     const editInput = document.getElementById("editInput");
-    if (editInput) editInput.focus();
+    if (editInput) {
+      editInput.focus();
+      editInput.select();
+    }
   }, 100);
 }
 
@@ -491,6 +581,12 @@ function saveRow(row, kategori, donaturLama) {
 }
 
 function hapusRow(kategori, donatur) {
+  // 🔥 Cek status upload sebelum hapus
+  if (sudahUploadHariIni[kategori]) {
+    showNotification("❌ Data sudah diupload. Tidak dapat menghapus.", false);
+    return;
+  }
+
   if (!confirm(`Apakah Anda yakin ingin menghapus donasi dari ${donatur}?`)) {
     return;
   }
@@ -510,6 +606,12 @@ function hapusRow(kategori, donatur) {
 
 function hapusData() {
   const kategori = cachedElements.kategoriDonatur.value;
+
+  // 🔥 Cek status upload sebelum hapus semua
+  if (sudahUploadHariIni[kategori]) {
+    showNotification("❌ Data sudah diupload. Tidak dapat menghapus data.", false);
+    return;
+  }
 
   if (dataDonasi.length === 0) {
     showNotification("Tidak ada data untuk dihapus", false);
@@ -584,14 +686,7 @@ function showUploadStatus(message, isSuccess = null) {
   }
 }
 
-// Fungsi upload data ke backend MySQL
-const kategoriMapping = {
-  kategori1: "RT Tengah",
-  kategori2: "RT Kulon",
-  kategori3: "RT Kidul",
-};
-
-// Main upload handler dengan retry logic
+// 🔥 MAIN UPLOAD HANDLER dengan real-time lock checking
 async function handleUpload() {
   const kategoriKey = cachedElements.kategoriDonatur.value;
   const kategoriValue = kategoriMapping[kategoriKey];
@@ -601,7 +696,7 @@ async function handleUpload() {
     return;
   }
 
-  // Double check dari server sebelum upload
+  // 🔥 DOUBLE CHECK dari server sebelum upload
   try {
     const statusCheck = await safeApiRequest(`/upload-status?kategori=${encodeURIComponent(kategoriValue)}`);
     if (statusCheck.already_uploaded) {
@@ -611,10 +706,15 @@ async function handleUpload() {
       );
       sudahUploadHariIni[kategoriKey] = true;
       updateUploadButtonState();
+      
+      // Nonaktifkan input
+      cachedElements.btnTambah.disabled = true;
+      cachedElements.pemasukan.disabled = true;
       return;
     }
   } catch (error) {
     console.error("Pre-upload status check failed:", error);
+    // Lanjutkan upload meskipun check gagal
   }
 
   try {
@@ -636,6 +736,10 @@ async function handleUpload() {
           tanggal_input: new Date().toISOString(),
         };
 
+        if (window.APP_CONFIG?.DEBUG) {
+          console.log("📤 Upload payload:", payload);
+        }
+
         const result = await safeApiRequest('/donasi', {
           method: "POST",
           body: JSON.stringify(payload),
@@ -643,23 +747,35 @@ async function handleUpload() {
 
         if (result) {
           successCount++;
+          if (window.APP_CONFIG?.DEBUG) {
+            console.log(`✅ Upload success for ${item.donatur}`);
+          }
         } else {
           errorCount++;
           errorMessages.push(`${item.donatur}: No response from server`);
         }
 
+        // Small delay between requests
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (itemError) {
-        // 🔥 IMPROVED: Handle kategori already uploaded error
+        console.error(`❌ Error uploading ${item.donatur}:`, itemError);
+        
+        // 🔥 Handle kategori already uploaded error
         if (itemError.message.includes('KATEGORI_ALREADY_UPLOADED') || 
-            itemError.message.includes('kategori sudah diupload')) {
+            itemError.message.includes('kategori sudah diupload') ||
+            itemError.message.includes('already uploaded')) {
+          
           showUploadStatus(
             `❌ Upload dibatalkan: ${kategoriLabel[kategoriKey]} sudah diupload oleh perangkat lain.`,
             false
           );
           sudahUploadHariIni[kategoriKey] = true;
           updateUploadButtonState();
+          
+          // Nonaktifkan input
+          cachedElements.btnTambah.disabled = true;
+          cachedElements.pemasukan.disabled = true;
           return;
         }
         
@@ -690,22 +806,35 @@ async function handleUpload() {
       renderTabelTerurut(kategoriKey);
       updateTotalDisplay();
       
+      // Nonaktifkan input setelah upload sukses
+      cachedElements.btnTambah.disabled = true;
+      cachedElements.pemasukan.disabled = true;
+      cachedElements.btnTambah.querySelector("#btnText").textContent = "Terkunci";
+      
     } else if (successCount > 0) {
       // Partial success
+      const errorSummary = errorMessages.slice(0, 3).join(', ');
+      const moreErrors = errorMessages.length > 3 ? ` dan ${errorMessages.length - 3} error lainnya` : '';
+      
       showUploadStatus(
-        `⚠️ ${successCount} data berhasil, ${errorCount} gagal`,
+        `⚠️ ${successCount} data berhasil, ${errorCount} gagal. Error: ${errorSummary}${moreErrors}`,
         false
       );
     } else {
       // All failed
-      throw new Error(`Semua upload gagal`);
+      const errorSummary = errorMessages.slice(0, 3).join(', ');
+      throw new Error(`Semua upload gagal: ${errorSummary}`);
     }
 
   } catch (err) {
     console.error("❌ Upload error:", err);
     
     let errorMessage = err.message;
-    if (err.message.includes('KATEGORI_ALREADY_UPLOADED')) {
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      errorMessage = "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+    } else if (err.message.includes('Network Error')) {
+      errorMessage = "Koneksi jaringan terputus. Periksa koneksi internet Anda.";
+    } else if (err.message.includes('KATEGORI_ALREADY_UPLOADED')) {
       errorMessage = `Data ${kategoriLabel[kategoriKey]} sudah diupload oleh perangkat lain.`;
       sudahUploadHariIni[kategoriKey] = true;
     }
@@ -716,12 +845,12 @@ async function handleUpload() {
     cachedElements.btnUpload.disabled = false;
     cachedElements.btnUpload.innerHTML = '<i class="fas fa-upload"></i> Upload Data';
     
-    // Refresh status dari server setelah upload
+    // 🔥 Refresh status dari server setelah upload attempt
     setTimeout(() => checkUploadStatus(), 2000);
   }
 }
 
-// Handle offline upload - DIPERBAIKI
+// Handle offline upload
 async function handleOfflineUpload(kategoriValue) {
   const confirmOffline = confirm(
     "Anda sedang offline. Data akan disimpan secara lokal dan diupload otomatis saat online. Lanjutkan?"
@@ -743,11 +872,10 @@ async function handleOfflineUpload(kategoriValue) {
         kategori_rt: kategoriValue,
         nominal: Number(item.nominal),
         tanggal_input: new Date().toISOString(),
-        endpoint: '/donasi', // Tambahkan endpoint untuk sync
-        method: 'POST' // Tambahkan method untuk sync
+        endpoint: '/donasi',
+        method: 'POST'
       };
 
-      // Save for offline sync
       const saved = await pwaManager.saveForOfflineSync("donasi", payload);
       if (!saved) {
         throw new Error("Gagal menyimpan data offline");
@@ -773,9 +901,59 @@ async function handleOfflineUpload(kategoriValue) {
   }
 }
 
+// 🔥 Reset data setiap hari baru
+function checkDayChange() {
+  const today = new Date().toISOString().split("T")[0];
+  const lastCheck = localStorage.getItem("lastDayCheck");
+  
+  if (lastCheck !== today) {
+    // Hari baru - reset semua status
+    localStorage.setItem("lastDayCheck", today);
+    
+    // Reset local upload status
+    localStorage.removeItem("lastUploadDate");
+    
+    // Reset UI state
+    Object.keys(sudahUploadHariIni).forEach(kategori => {
+      sudahUploadHariIni[kategori] = false;
+    });
+    
+    // Refresh status dari server
+    checkUploadStatus();
+    
+    if (window.APP_CONFIG?.DEBUG) {
+      console.log("🔄 Day change detected - resetting upload status");
+    }
+  }
+}
+
+// Initialize day change checker
+setInterval(checkDayChange, 60000); // Check every minute
+checkDayChange(); // Check on load
+
 // Cleanup function untuk mencegah memory leaks
 window.addEventListener("beforeunload", () => {
+  if (periodicCheckInterval) {
+    clearInterval(periodicCheckInterval);
+  }
   domCache.clear();
   dataDonasi = null;
   donaturTerinput = null;
 });
+
+// Export functions untuk testing (jika diperlukan)
+if (window.APP_CONFIG?.DEBUG) {
+  window.jimpitanApp = {
+    checkUploadStatus,
+    updateUploadButtonState,
+    getUploadStatus: () => sudahUploadHariIni,
+    getDataDonasi: () => dataDonasi,
+    resetApp: () => {
+      dataDonasi = [];
+      Object.keys(donaturTerinput).forEach(k => donaturTerinput[k].clear());
+      Object.keys(sudahUploadHariIni).forEach(k => sudahUploadHariIni[k] = false);
+      localStorage.removeItem("lastUploadDate");
+      checkUploadStatus();
+    }
+  };
+}
