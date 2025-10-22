@@ -102,39 +102,18 @@ if (document.readyState === 'loading') {
 function initializeApp() {
   const startTime = Date.now();
   
-  // Safety check - pastikan dependencies sudah loaded
+  // Safety check
   if (!window.APP_CONFIG) {
-    console.error('❌ APP_CONFIG not found. Make sure config.js is loaded first.');
+    console.error('❌ APP_CONFIG not found.');
     showNotification('Configuration error. Please refresh the page.', false);
     return;
   }
   
-  if (window.APP_CONFIG?.DEBUG) {
-    APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
-    APP_LOGGER.log("🔧 ApiHelper available:", !!window.ApiHelper);
-    APP_LOGGER.log("🔧 safeApiRequest available:", !!window.safeApiRequest);
-  }
-  
-  cachedElements = {
-    tanggalHariIni: document.getElementById("tanggalHariIni"),
-    notifikasi: document.getElementById("notifikasi"),
-    kategoriDonatur: document.getElementById("kategoriDonatur"),
-    donatur: document.getElementById("donatur"),
-    pemasukan: document.getElementById("pemasukan"),
-    btnTambah: document.getElementById("btnTambah"),
-    btnUpload: document.getElementById("btnUpload"),
-    btnHapus: document.getElementById("btnHapus"),
-    tabelDonasi: document.getElementById("tabelDonasi"),
-    totalDonasi: document.getElementById("totalDonasi"),
-    uploadStatus: document.getElementById("uploadStatus"),
-    uploadInfo: document.getElementById("uploadInfo"),
-  };
-
   // Initialize UI
   initUI();
   setupEventListeners();
-  checkUploadStatus();
-  updateUploadButtonState();
+  checkUploadStatus(); // Check status saat load
+  startPeriodicStatusCheck(); // 🔥 NEW: Start periodic checking
   
   if (window.APP_CONFIG?.DEBUG) {
     window.AppLogger.performance("App Initialization", startTime);
@@ -263,24 +242,57 @@ function muatDropdown(kategori = "kategori1") {
   updateUploadButtonState();
 }
 
-// Check upload status dengan caching
-function checkUploadStatus() {
-  const lastUploadDate = getLastUploadDate();
-  const today = new Date().toISOString().split("T")[0];
-  const kategori = cachedElements.kategoriDonatur.value;
+// 🔥 NEW: Periodic check untuk real-time sync
+function startPeriodicStatusCheck() {
+  // Check status setiap 30 detik
+  setInterval(() => {
+    if (!document.hidden) { // Hanya check jika tab aktif
+      checkUploadStatus();
+    }
+  }, 30000);
+}
 
-  if (lastUploadDate[kategori] === today) {
-    sudahUploadHariIni[kategori] = true;
-    showUploadStatus(
-      `Anda sudah melakukan upload hari ini untuk ${kategoriLabel[kategori]}. Upload hanya dapat dilakukan sekali per hari.`,
-      false
-    );
-  } else {
-    sudahUploadHariIni[kategori] = false;
-    showUploadStatus(
-      `Siap untuk upload data kategori ${kategoriLabel[kategori]}`,
-      null
-    );
+// Check upload status dengan caching
+async function checkUploadStatus() {
+  const kategori = cachedElements.kategoriDonatur.value;
+  const kategoriValue = kategoriMapping[kategori];
+
+  try {
+    // Check status dari server
+    const response = await safeApiRequest(`/upload-status?kategori=${encodeURIComponent(kategoriValue)}`);
+    
+    if (response.already_uploaded) {
+      sudahUploadHariIni[kategori] = true;
+      showUploadStatus(
+        `❌ Data ${kategoriLabel[kategori]} hari ini sudah diupload. Upload hanya dapat dilakukan sekali per hari.`,
+        false
+      );
+    } else {
+      sudahUploadHariIni[kategori] = false;
+      showUploadStatus(
+        `✅ Siap untuk upload data ${kategoriLabel[kategori]}`,
+        true
+      );
+    }
+  } catch (error) {
+    console.error("Error checking upload status:", error);
+    // Fallback ke local storage jika server error
+    const lastUploadDate = getLastUploadDate();
+    const today = new Date().toISOString().split("T")[0];
+
+    if (lastUploadDate[kategori] === today) {
+      sudahUploadHariIni[kategori] = true;
+      showUploadStatus(
+        `❌ Data ${kategoriLabel[kategori]} hari ini sudah diupload (local).`,
+        false
+      );
+    } else {
+      sudahUploadHariIni[kategori] = false;
+      showUploadStatus(
+        `✅ Siap untuk upload data ${kategoriLabel[kategori]}`,
+        true
+      );
+    }
   }
 
   updateUploadButtonState();
@@ -589,10 +601,20 @@ async function handleUpload() {
     return;
   }
 
-  // Check if offline
-  if (pwaManager && !pwaManager.isOnline) {
-    const success = await handleOfflineUpload(kategoriValue);
-    if (success) return;
+  // Double check dari server sebelum upload
+  try {
+    const statusCheck = await safeApiRequest(`/upload-status?kategori=${encodeURIComponent(kategoriValue)}`);
+    if (statusCheck.already_uploaded) {
+      showUploadStatus(
+        `❌ Data ${kategoriLabel[kategoriKey]} sudah diupload oleh perangkat lain.`,
+        false
+      );
+      sudahUploadHariIni[kategoriKey] = true;
+      updateUploadButtonState();
+      return;
+    }
+  } catch (error) {
+    console.error("Pre-upload status check failed:", error);
   }
 
   try {
@@ -614,11 +636,6 @@ async function handleUpload() {
           tanggal_input: new Date().toISOString(),
         };
 
-        if (window.APP_CONFIG?.DEBUG) {
-          APP_LOGGER.log("📤 Upload payload:", payload);
-        }
-
-        // GUNAKAN safeApiRequest UNTUK UPLOAD - INI YANG DIPERBAIKI
         const result = await safeApiRequest('/donasi', {
           method: "POST",
           body: JSON.stringify(payload),
@@ -626,19 +643,26 @@ async function handleUpload() {
 
         if (result) {
           successCount++;
-          if (window.APP_CONFIG?.DEBUG) {
-            APP_LOGGER.log(`✅ Upload success for ${item.donatur}`);
-          }
         } else {
           errorCount++;
           errorMessages.push(`${item.donatur}: No response from server`);
         }
 
-        // Small delay between requests to avoid overwhelming server
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (itemError) {
-        APP_LOGGER.error(`❌ Error uploading ${item.donatur}:`, itemError);
+        // 🔥 IMPROVED: Handle kategori already uploaded error
+        if (itemError.message.includes('KATEGORI_ALREADY_UPLOADED') || 
+            itemError.message.includes('kategori sudah diupload')) {
+          showUploadStatus(
+            `❌ Upload dibatalkan: ${kategoriLabel[kategoriKey]} sudah diupload oleh perangkat lain.`,
+            false
+          );
+          sudahUploadHariIni[kategoriKey] = true;
+          updateUploadButtonState();
+          return;
+        }
+        
         errorCount++;
         errorMessages.push(`${item.donatur}: ${itemError.message}`);
       }
@@ -648,6 +672,8 @@ async function handleUpload() {
     if (errorCount === 0) {
       // All successful
       sudahUploadHariIni[kategoriKey] = true;
+      
+      // Update local storage
       let lastUploadDate = getLastUploadDate();
       lastUploadDate[kategoriKey] = new Date().toISOString().split("T")[0];
       localStorage.setItem("lastUploadDate", JSON.stringify(lastUploadDate));
@@ -666,28 +692,22 @@ async function handleUpload() {
       
     } else if (successCount > 0) {
       // Partial success
-      const errorSummary = errorMessages.slice(0, 3).join(', ');
-      const moreErrors = errorMessages.length > 3 ? ` dan ${errorMessages.length - 3} error lainnya` : '';
-      
       showUploadStatus(
-        `⚠️ ${successCount} data berhasil, ${errorCount} gagal. Error: ${errorSummary}${moreErrors}`,
+        `⚠️ ${successCount} data berhasil, ${errorCount} gagal`,
         false
       );
     } else {
       // All failed
-      const errorSummary = errorMessages.slice(0, 3).join(', ');
-      throw new Error(`Semua upload gagal: ${errorSummary}`);
+      throw new Error(`Semua upload gagal`);
     }
 
   } catch (err) {
-    APP_LOGGER.error("❌ Upload error:", err);
+    console.error("❌ Upload error:", err);
     
-    // Enhanced error handling
     let errorMessage = err.message;
-    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-      errorMessage = "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
-    } else if (err.message.includes('Network Error')) {
-      errorMessage = "Koneksi jaringan terputus. Periksa koneksi internet Anda.";
+    if (err.message.includes('KATEGORI_ALREADY_UPLOADED')) {
+      errorMessage = `Data ${kategoriLabel[kategoriKey]} sudah diupload oleh perangkat lain.`;
+      sudahUploadHariIni[kategoriKey] = true;
     }
     
     showUploadStatus(`❌ ${errorMessage}`, false);
@@ -695,6 +715,9 @@ async function handleUpload() {
     updateUploadButtonState();
     cachedElements.btnUpload.disabled = false;
     cachedElements.btnUpload.innerHTML = '<i class="fas fa-upload"></i> Upload Data';
+    
+    // Refresh status dari server setelah upload
+    setTimeout(() => checkUploadStatus(), 2000);
   }
 }
 
