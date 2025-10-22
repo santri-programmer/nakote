@@ -37,16 +37,21 @@ class JimpitanPWA {
   async registerServiceWorker() {
     if ("serviceWorker" in navigator) {
       try {
-        this.serviceWorkerRegistration = await navigator.serviceWorker.register("/nakote/sw.js");
-        
+        this.serviceWorkerRegistration = await navigator.serviceWorker.register(
+          "/nakote/sw.js"
+        );
+
         if (window.APP_CONFIG?.DEBUG) {
-          console.log("🟢 Service Worker registered:", this.serviceWorkerRegistration);
+          console.log(
+            "🟢 Service Worker registered:",
+            this.serviceWorkerRegistration
+          );
         }
 
         // Check for updates
         this.serviceWorkerRegistration.addEventListener("updatefound", () => {
           const newWorker = this.serviceWorkerRegistration.installing;
-          
+
           if (window.APP_CONFIG?.DEBUG) {
             console.log("🔄 New Service Worker found:", newWorker);
           }
@@ -287,11 +292,17 @@ class JimpitanPWA {
   }
 
   async setupPeriodicSync() {
-    if (this.serviceWorkerRegistration && "periodicSync" in this.serviceWorkerRegistration) {
+    if (
+      this.serviceWorkerRegistration &&
+      "periodicSync" in this.serviceWorkerRegistration
+    ) {
       try {
-        await this.serviceWorkerRegistration.periodicSync.register("sync-pending-donasi", {
-          minInterval: 24 * 60 * 60 * 1000, // 1 day
-        });
+        await this.serviceWorkerRegistration.periodicSync.register(
+          "sync-pending-donasi",
+          {
+            minInterval: 24 * 60 * 60 * 1000, // 1 day
+          }
+        );
         if (window.APP_CONFIG?.DEBUG) {
           console.log("✅ Periodic sync registered");
         }
@@ -317,21 +328,31 @@ class JimpitanPWA {
       const store = transaction.objectStore("pendingData");
 
       const pendingItem = {
-        id: Date.now(),
+        id: Date.now() + Math.random(), // More unique ID
         type: dataType,
         data: data,
         timestamp: new Date().toISOString(),
+        attempts: 0, // Track sync attempts
       };
 
       await store.add(pendingItem);
-      
+
       if (window.APP_CONFIG?.DEBUG) {
         console.log("💾 Data saved for offline sync:", pendingItem);
       }
 
-      // Register background sync
-      if (this.serviceWorkerRegistration && "sync" in this.serviceWorkerRegistration) {
-        await this.serviceWorkerRegistration.sync.register("sync-pending-data");
+      // Register background sync dengan exponential backoff
+      if (
+        this.serviceWorkerRegistration &&
+        "sync" in this.serviceWorkerRegistration
+      ) {
+        try {
+          await this.serviceWorkerRegistration.sync.register(
+            "sync-pending-data"
+          );
+        } catch (syncError) {
+          console.warn("Background sync registration failed:", syncError);
+        }
       }
 
       return true;
@@ -345,12 +366,23 @@ class JimpitanPWA {
   async syncOfflineData() {
     try {
       const db = await this.openDB();
-      const transaction = db.transaction(["pendingData"], "readonly");
+      const transaction = db.transaction(["pendingData"], "readwrite");
       const store = transaction.objectStore("pendingData");
       const allData = await store.getAll();
 
       if (window.APP_CONFIG?.DEBUG) {
         console.log(`🔄 Syncing ${allData.length} offline items...`);
+      }
+
+      const batchSize = 5;
+      for (let i = 0; i < allData.length; i += batchSize) {
+        const batch = allData.slice(i, i + batchSize);
+        await Promise.allSettled(batch.map((item) => this.syncItem(item)));
+
+        // Small delay between batches
+        if (i + batchSize < allData.length) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
       }
 
       for (const item of allData) {
