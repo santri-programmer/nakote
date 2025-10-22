@@ -160,3 +160,25 @@ td:last-child {
 td.font-mono {
   font-family: "Roboto Mono", monospace;
 }
+
+/* Style untuk dropdown yang auto-select */
+#donatur {
+  cursor: pointer;
+}
+
+#donatur:focus {
+  border-color: #8b5cf6;
+  ring: 2px;
+  ring-color: #8b5cf6;
+}
+
+/* Highlight untuk opsi yang ter-select */
+#donatur option:checked {
+  background-color: #8b5cf6;
+  color: white;
+}
+
+/* Smooth transition untuk dropdown */
+#donatur {
+  transition: all 0.2s ease-in-out;
+}
