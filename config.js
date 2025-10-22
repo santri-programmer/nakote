@@ -112,9 +112,14 @@ window.AppLogger = {
   }
 };
 
-// API Service Helper dengan security headers
+// API Service Helper dengan security headers dan safety check
 window.ApiHelper = {
   async request(endpoint, options = {}) {
+    // Safety check - pastikan APP_CONFIG sudah terload
+    if (!window.APP_CONFIG) {
+      throw new Error('Configuration not loaded. Please refresh the page.');
+    }
+    
     const startTime = Date.now();
     const maxRetries = window.APP_CONFIG.RETRY_ATTEMPTS;
     
@@ -176,6 +181,29 @@ window.ApiHelper = {
   }
 };
 
+// Fallback function jika ApiHelper belum tersedia
+window.safeApiRequest = async function(endpoint, options = {}) {
+  if (window.ApiHelper && window.ApiHelper.request) {
+    return window.ApiHelper.request(endpoint, options);
+  } else {
+    // Fallback ke fetch biasa
+    const API_URL = window.APP_CONFIG?.API_URL || "https://api.pnakote.my.id/api";
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    return response.json();
+  }
+};
+
 // Security: Remove debug functions from global scope in production
 if (!window.APP_CONFIG.DEBUG) {
   setTimeout(() => {
@@ -187,3 +215,12 @@ if (!window.APP_CONFIG.DEBUG) {
     }
   }, 1000);
 }
+
+// Initialize check
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.APP_CONFIG?.DEBUG) {
+    console.log('✅ Configuration loaded successfully');
+    console.log('🔧 ApiHelper available:', !!window.ApiHelper);
+    console.log('🌐 API URL:', window.APP_CONFIG.API_URL);
+  }
+});
