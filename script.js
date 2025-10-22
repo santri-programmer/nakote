@@ -2,6 +2,25 @@
 const API_URL = window.APP_CONFIG?.API_URL || "https://api.pnakote.my.id/api";
 const APP_LOGGER = window.AppLogger || console;
 
+// Security: Disable console in production for main app too
+if (!window.APP_CONFIG?.DEBUG) {
+  // Override console methods
+  const originalConsole = console;
+  console = {
+    log: () => {},
+    info: () => {},
+    warn: () => {},
+    debug: () => {},
+    error: () => {}, // Minimal error logging
+    trace: () => {},
+    table: () => {},
+    group: () => {},
+    groupEnd: () => {},
+    groupCollapsed: () => {},
+    clear: () => {}
+  };
+}
+
 // ======= DATA & INIT =======
 const kategoriDonatur = {
   kategori1: [
@@ -73,10 +92,11 @@ let cachedElements = {};
 let domCache = new Map();
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Only log in development
   if (window.APP_CONFIG?.DEBUG) {
     APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
   }
-
+  
   initializeApp();
 });
 
