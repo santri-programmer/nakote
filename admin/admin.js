@@ -1,4 +1,4 @@
-// Admin Dashboard - Production Ready dengan Performance Improvements
+// Admin Dashboard - Production Ready dengan Security Enhancements
 const API_URL = window.APP_CONFIG?.API_URL || "https://api.pnakote.my.id/api";
 const APP_LOGGER = window.AppLogger || console;
 
@@ -6,17 +6,40 @@ const APP_LOGGER = window.AppLogger || console;
 let reportCache = new Map();
 let domCache = new Map();
 
+// Security: Hide debug functions in production
+if (!window.APP_CONFIG?.DEBUG) {
+  // Remove debug utilities from global scope
+  const originalConsole = console;
+  console = {
+    log: () => {},
+    info: () => {},
+    warn: () => {},
+    debug: () => {},
+    error: () => {}, // Keep errors minimal in production
+    trace: () => {},
+    table: () => {},
+    group: () => {},
+    groupEnd: () => {},
+    groupCollapsed: () => {},
+    clear: () => {}
+  };
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  APP_LOGGER.log("🚀 Admin Dashboard Initializing...");
+  // Only log in development mode
+  if (window.APP_CONFIG?.DEBUG) {
+    APP_LOGGER.log("🚀 Admin Dashboard Initializing...");
+  }
+  
   initializeAdminDashboard();
 });
 
 function initializeAdminDashboard() {
   const startTime = Date.now();
-
+  
   // Cache DOM elements
   cacheDOMElements();
-
+  
   // Set tanggal default ke hari ini
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("filterTanggal").value = today;
@@ -26,11 +49,13 @@ function initializeAdminDashboard() {
 
   // Setup event listeners dengan event delegation
   setupEventListeners();
-
+  
   // Update info text berdasarkan periode
   updateTanggalInfo();
-
-  window.AppLogger.performance("Admin Dashboard Initialization", startTime);
+  
+  if (window.APP_CONFIG?.DEBUG) {
+    window.AppLogger.performance("Admin Dashboard Initialization", startTime);
+  }
 }
 
 function cacheDOMElements() {
@@ -44,43 +69,43 @@ function cacheDOMElements() {
     infoText: document.getElementById("infoText"),
     btnLogout: document.getElementById("btnLogout"),
     tabelLaporan: document.getElementById("tabelLaporan"),
-    totalLaporan: document.getElementById("totalLaporan"),
+    totalLaporan: document.getElementById("totalLaporan")
   };
-
+  
   // Store in domCache for reuse
-  domCache.set("elements", elements);
+  domCache.set('elements', elements);
 }
 
 function getElement(id) {
-  const elements = domCache.get("elements") || {};
+  const elements = domCache.get('elements') || {};
   return elements[id] || document.getElementById(id);
 }
 
 function setupEventListeners() {
   // Event delegation untuk performance
-  document.addEventListener("click", (e) => {
-    if (e.target.closest("#btnGenerate")) {
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#btnGenerate')) {
       generateLaporan();
-    } else if (e.target.closest("#btnExportPDF")) {
+    } else if (e.target.closest('#btnExportPDF')) {
       exportLaporan("pdf");
-    } else if (e.target.closest("#btnExportExcel")) {
+    } else if (e.target.closest('#btnExportExcel')) {
       exportLaporan("xlsx");
-    } else if (e.target.closest("#btnLogout")) {
+    } else if (e.target.closest('#btnLogout')) {
       handleLogout();
     }
   });
 
   // Event listeners untuk real-time updates
-  getElement("filterKategori").addEventListener("change", () => {
+  getElement('filterKategori').addEventListener("change", () => {
     updateUIState();
   });
 
-  getElement("filterPeriode").addEventListener("change", () => {
+  getElement('filterPeriode').addEventListener("change", () => {
     updateTanggalInfo();
     updateUIState();
   });
 
-  getElement("filterTanggal").addEventListener("change", () => {
+  getElement('filterTanggal').addEventListener("change", () => {
     updateUIState();
   });
 }
@@ -94,8 +119,8 @@ function handleLogout() {
 
 // Update info text berdasarkan periode yang dipilih
 function updateTanggalInfo() {
-  const periode = getElement("filterPeriode").value;
-  const infoText = getElement("infoText");
+  const periode = getElement('filterPeriode').value;
+  const infoText = getElement('infoText');
 
   switch (periode) {
     case "harian":
@@ -116,8 +141,8 @@ function updateTanggalInfo() {
 
 // Fungsi untuk load data awal dengan caching
 async function loadInitialData() {
-  const cacheKey = "initial-data-harian-semua";
-
+  const cacheKey = 'initial-data-harian-semua';
+  
   if (reportCache.has(cacheKey)) {
     renderTabel(reportCache.get(cacheKey));
     showNotification("Data laporan berhasil dimuat dari cache", true);
@@ -139,9 +164,9 @@ async function loadInitialData() {
 
 // Fungsi utama generate laporan dengan caching
 async function generateLaporan() {
-  const kategori = getElement("filterKategori").value;
-  const periode = getElement("filterPeriode").value;
-  const tanggal = getElement("filterTanggal").value;
+  const kategori = getElement('filterKategori').value;
+  const periode = getElement('filterPeriode').value;
+  const tanggal = getElement('filterTanggal').value;
 
   if (!kategori || !periode || !tanggal) {
     showNotification(
@@ -152,7 +177,7 @@ async function generateLaporan() {
   }
 
   const cacheKey = `${periode}-${kategori}-${tanggal}`;
-
+  
   // Check cache first
   if (reportCache.has(cacheKey)) {
     const cachedData = reportCache.get(cacheKey);
@@ -167,15 +192,19 @@ async function generateLaporan() {
   try {
     showLoadingState(true);
 
-    APP_LOGGER.log("🔄 Generate Laporan Params:", {
-      kategori: kategori,
-      periode: periode,
-      tanggal: tanggal,
-    });
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("🔄 Generate Laporan Params:", {
+        kategori: kategori,
+        periode: periode,
+        tanggal: tanggal,
+      });
+    }
 
     const data = await getLaporan(kategori, periode, tanggal);
 
-    APP_LOGGER.log("📊 Data Received:", data);
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("📊 Data Received:", data);
+    }
 
     if (data && data.length > 0) {
       // Cache the result
@@ -195,7 +224,9 @@ async function generateLaporan() {
       );
     }
   } catch (error) {
-    APP_LOGGER.error("❌ Error generating report:", error);
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.error("❌ Error generating report:", error);
+    }
     showNotification("Gagal generate laporan: " + error.message, false);
   } finally {
     showLoadingState(false);
@@ -204,9 +235,9 @@ async function generateLaporan() {
 
 // Fungsi export laporan
 async function exportLaporan(format) {
-  const kategori = getElement("filterKategori").value;
-  const periode = getElement("filterPeriode").value;
-  const tanggal = getElement("filterTanggal").value;
+  const kategori = getElement('filterKategori').value;
+  const periode = getElement('filterPeriode').value;
+  const tanggal = getElement('filterTanggal').value;
 
   if (!kategori || !periode || !tanggal) {
     showNotification(
@@ -217,12 +248,14 @@ async function exportLaporan(format) {
   }
 
   try {
-    APP_LOGGER.log(`📤 Export ${format.toUpperCase()} Params:`, {
-      format: format,
-      kategori: kategori,
-      periode: periode,
-      tanggal: tanggal,
-    });
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log(`📤 Export ${format.toUpperCase()} Params:`, {
+        format: format,
+        kategori: kategori,
+        periode: periode,
+        tanggal: tanggal,
+      });
+    }
 
     // Test koneksi sebelum export menggunakan ApiHelper
     const testData = await getLaporan(kategori, periode, tanggal);
@@ -235,7 +268,10 @@ async function exportLaporan(format) {
     const url = `${API_URL}/laporan/export?format=${format}&periode=${periode}&kategori=${encodeURIComponent(
       kategori
     )}&tanggal=${tanggal}`;
-    APP_LOGGER.log("🔗 Export URL:", url);
+    
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("🔗 Export URL:", url);
+    }
 
     // Buka tab baru untuk export
     const newWindow = window.open(url, "_blank");
@@ -249,7 +285,9 @@ async function exportLaporan(format) {
       true
     );
   } catch (error) {
-    APP_LOGGER.error(`❌ Error exporting ${format}:`, error);
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.error(`❌ Error exporting ${format}:`, error);
+    }
     showNotification(`Gagal export ${format}: ` + error.message, false);
   }
 }
@@ -257,7 +295,9 @@ async function exportLaporan(format) {
 // Fungsi get data laporan dari API dengan parameter tanggal
 async function getLaporan(kategori, periode, tanggal) {
   try {
-    APP_LOGGER.log("📡 Fetching laporan:", { kategori, periode, tanggal });
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("📡 Fetching laporan:", { kategori, periode, tanggal });
+    }
 
     // Build URL dengan parameter tanggal
     let url = `/laporan?periode=${periode}&kategori=${encodeURIComponent(
@@ -269,10 +309,12 @@ async function getLaporan(kategori, periode, tanggal) {
 
     // Use ApiHelper for retry logic and better error handling
     const result = await window.ApiHelper.request(url, {
-      method: "GET",
+      method: "GET"
     });
 
-    APP_LOGGER.log("✅ API Response:", result);
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("✅ API Response:", result);
+    }
 
     // Handle different response formats
     if (result.success !== undefined) {
@@ -280,11 +322,15 @@ async function getLaporan(kategori, periode, tanggal) {
     } else if (Array.isArray(result)) {
       return result;
     } else {
-      APP_LOGGER.warn("⚠️ Unknown response format:", result);
+      if (window.APP_CONFIG?.DEBUG) {
+        APP_LOGGER.warn("⚠️ Unknown response format:", result);
+      }
       return [];
     }
   } catch (error) {
-    APP_LOGGER.error("❌ Error fetching laporan:", error);
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.error("❌ Error fetching laporan:", error);
+    }
     throw error;
   }
 }
@@ -292,7 +338,7 @@ async function getLaporan(kategori, periode, tanggal) {
 // Fungsi render tabel dengan virtual scrolling untuk large datasets
 function renderTabel(data) {
   const tbody = document.querySelector("#tabelLaporan tbody");
-  const totalDisplay = getElement("totalLaporan");
+  const totalDisplay = getElement('totalLaporan');
 
   // Clear existing data
   tbody.innerHTML = "";
@@ -311,13 +357,13 @@ function renderTabel(data) {
   }
 
   let total = 0;
-  let html = "";
+  let html = '';
 
   // Build HTML string untuk performance (batch DOM updates)
   data.forEach((item, index) => {
     total += parseInt(item.nominal) || 0;
     html += `
-      <tr class="${index % 2 === 0 ? "bg-white" : "bg-gray-50"}">
+      <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
         <td class="py-3 px-4 border-b border-gray-200">${formatTanggal(
           item.tanggal_input
         )}</td>
@@ -338,7 +384,10 @@ function renderTabel(data) {
 
   // Update total
   totalDisplay.textContent = formatRupiah(total);
-  APP_LOGGER.log("📈 Total calculated:", total);
+  
+  if (window.APP_CONFIG?.DEBUG) {
+    APP_LOGGER.log("📈 Total calculated:", total);
+  }
 }
 
 // Helper function untuk format tanggal
@@ -424,9 +473,9 @@ function showNotification(message, type = "info") {
 
 // Fungsi untuk show/hide loading state
 function showLoadingState(show) {
-  const btnGenerate = getElement("btnGenerate");
-  const btnExportPDF = getElement("btnExportPDF");
-  const btnExportExcel = getElement("btnExportExcel");
+  const btnGenerate = getElement('btnGenerate');
+  const btnExportPDF = getElement('btnExportPDF');
+  const btnExportExcel = getElement('btnExportExcel');
 
   if (show) {
     btnGenerate.innerHTML =
@@ -445,15 +494,17 @@ function showLoadingState(show) {
 
 // Fungsi untuk update UI state
 function updateUIState() {
-  const kategori = getElement("filterKategori").value;
-  const periode = getElement("filterPeriode").value;
-  const tanggal = getElement("filterTanggal").value;
+  const kategori = getElement('filterKategori').value;
+  const periode = getElement('filterPeriode').value;
+  const tanggal = getElement('filterTanggal').value;
 
-  APP_LOGGER.log("🔄 UI State Updated:", { kategori, periode, tanggal });
+  if (window.APP_CONFIG?.DEBUG) {
+    APP_LOGGER.log("🔄 UI State Updated:", { kategori, periode, tanggal });
+  }
 }
 
 // Cleanup function
-window.addEventListener("beforeunload", () => {
+window.addEventListener('beforeunload', () => {
   reportCache.clear();
   domCache.clear();
 });
@@ -462,30 +513,35 @@ window.addEventListener("beforeunload", () => {
 window.generateLaporan = generateLaporan;
 window.exportLaporan = exportLaporan;
 
-// Test functions untuk debugging
-window.adminDebug = {
-  testConnection: async function () {
-    try {
-      const response = await window.ApiHelper.request("/health");
-      APP_LOGGER.log("🔗 Connection test:", response);
-      return response;
-    } catch (error) {
-      APP_LOGGER.error("❌ Connection test failed:", error);
-      return null;
+// Debug functions hanya tersedia di development mode
+if (window.APP_CONFIG?.DEBUG) {
+  window.adminDebug = {
+    testConnection: async function () {
+      try {
+        const response = await window.ApiHelper.request('/health');
+        APP_LOGGER.log("🔗 Connection test:", response);
+        return response;
+      } catch (error) {
+        APP_LOGGER.error("❌ Connection test failed:", error);
+        return null;
+      }
+    },
+
+    clearCache: function() {
+      reportCache.clear();
+      domCache.clear();
+      localStorage.removeItem('reportCache');
+      showNotification("Cache cleared successfully", true);
+    },
+
+    getCacheStats: function() {
+      return {
+        reportCacheSize: reportCache.size,
+        domCacheSize: domCache.size
+      };
     }
-  },
-
-  clearCache: function () {
-    reportCache.clear();
-    domCache.clear();
-    localStorage.removeItem("reportCache");
-    showNotification("Cache cleared successfully", true);
-  },
-
-  getCacheStats: function () {
-    return {
-      reportCacheSize: reportCache.size,
-      domCacheSize: domCache.size,
-    };
-  },
-};
+  };
+} else {
+  // Remove debug functions in production
+  window.adminDebug = undefined;
+}
