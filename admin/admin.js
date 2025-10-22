@@ -48,6 +48,13 @@ if (!window.APP_CONFIG?.DEBUG) {
   };
 }
 
+// Wait for DOM to be fully loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeAdminDashboard);
+} else {
+  initializeAdminDashboard();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Only log in development mode
   if (window.APP_CONFIG?.DEBUG) {
@@ -59,6 +66,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function initializeAdminDashboard() {
   const startTime = Date.now();
+  
+  // Safety check - pastikan dependencies sudah loaded
+  if (!window.APP_CONFIG) {
+    console.error('❌ APP_CONFIG not found. Make sure config.js is loaded first.');
+    showNotification('Configuration error. Please refresh the page.', false);
+    return;
+  }
+  
+  if (window.APP_CONFIG?.DEBUG) {
+    APP_LOGGER.log("🚀 Admin Dashboard Initializing...");
+    APP_LOGGER.log("🔧 ApiHelper available:", !!window.ApiHelper);
+  }
   
   // Cache DOM elements
   cacheDOMElements();
@@ -253,6 +272,108 @@ async function generateLaporan() {
     showNotification("Gagal generate laporan: " + error.message, false);
   } finally {
     showLoadingState(false);
+  }
+}
+
+// Fungsi export laporan
+async function exportLaporan(format) {
+  const kategori = getElement('filterKategori').value;
+  const periode = getElement('filterPeriode').value;
+  const tanggal = getElement('filterTanggal').value;
+
+  if (!kategori || !periode || !tanggal) {
+    showNotification(
+      "Pilih kategori, periode, dan tanggal terlebih dahulu",
+      false
+    );
+    return;
+  }
+
+  try {
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log(`📤 Export ${format.toUpperCase()} Params:`, {
+        format: format,
+        kategori: kategori,
+        periode: periode,
+        tanggal: tanggal,
+      });
+    }
+
+    // Test koneksi sebelum export
+    const testData = await getLaporan(kategori, periode, tanggal);
+    if (!testData || testData.length === 0) {
+      showNotification("Tidak ada data untuk di-export", "info");
+      return;
+    }
+
+    // Build export URL
+    const url = `${API_URL}/laporan/export?format=${format}&periode=${periode}&kategori=${encodeURIComponent(
+      kategori
+    )}&tanggal=${tanggal}`;
+    
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("🔗 Export URL:", url);
+    }
+
+    // Buka tab baru untuk export
+    const newWindow = window.open(url, "_blank");
+
+    if (!newWindow) {
+      throw new Error("Popup diblokir. Izinkan popup untuk situs ini.");
+    }
+
+    showNotification(
+      `Export ${format.toUpperCase()} berhasil dibuka di tab baru`,
+      true
+    );
+  } catch (error) {
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.error(`❌ Error exporting ${format}:`, error);
+    }
+    showNotification(`Gagal export ${format}: ` + error.message, false);
+  }
+}
+
+// Fungsi get data laporan dari API dengan parameter tanggal
+async function getLaporan(kategori, periode, tanggal) {
+  try {
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("📡 Fetching laporan:", { kategori, periode, tanggal });
+    }
+
+    // Build URL dengan parameter tanggal
+    let url = `/laporan?periode=${periode}&kategori=${encodeURIComponent(
+      kategori
+    )}`;
+    if (tanggal) {
+      url += `&tanggal=${tanggal}`;
+    }
+
+    // Use safeApiRequest dengan fallback mechanism
+    const result = await safeApiRequest(url, {
+      method: "GET"
+    });
+
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.log("✅ API Response:", result);
+    }
+
+    // Handle different response formats
+    if (result.success !== undefined) {
+      return result.data || [];
+    } else if (Array.isArray(result)) {
+      return result;
+    } else {
+      if (window.APP_CONFIG?.DEBUG) {
+        APP_LOGGER.warn("⚠️ Unknown response format:", result);
+      }
+      return [];
+    }
+  } catch (error) {
+    if (window.APP_CONFIG?.DEBUG) {
+      APP_LOGGER.error("❌ Error fetching laporan:", error);
+    }
+    throw error;
   }
 }
 
