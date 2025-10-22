@@ -2,6 +2,32 @@
 const API_URL = window.APP_CONFIG?.API_URL || "https://api.pnakote.my.id/api";
 const APP_LOGGER = window.AppLogger || console;
 
+// Safe API request function dengan fallback
+const safeApiRequest = async (endpoint, options = {}) => {
+  if (window.ApiHelper && typeof window.ApiHelper.request === 'function') {
+    return window.ApiHelper.request(endpoint, options);
+  } else if (window.safeApiRequest) {
+    return window.safeApiRequest(endpoint, options);
+  } else {
+    // Fallback ke fetch langsung
+    const API_BASE = window.APP_CONFIG?.API_URL || "https://api.pnakote.my.id/api";
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+    return response.json();
+  }
+};
+
 // Security: Disable console in production for main app too
 if (!window.APP_CONFIG?.DEBUG) {
   // Override console methods
@@ -24,38 +50,13 @@ if (!window.APP_CONFIG?.DEBUG) {
 // ======= DATA & INIT =======
 const kategoriDonatur = {
   kategori1: [
-    "Mas Ani",
-    "Pak Kholis",
-    "Pak Hasyim",
-    "Amat",
-    "Mbak Is",
-    "Dani",
-    "Pak Napi",
-    "Pak Ipin",
-    "Mas Agus BZ",
-    "Pak Fat",
-    "Pak Ropi",
-    "Mas Umam",
-    "Pak Kisman",
-    "Pak Yanto",
-    "Pak Pardi",
-    "Pak Salam",
-    "Pak Piyan",
-    "Pak Slamet",
-    "Pak Ibin",
-    "Idek",
-    "Pak Ngari",
-    "Pak Tukhin",
-    "Pak Rofiq",
-    "Pak Syafak",
-    "Pak Jubaidi",
-    "Mbak Kholis",
-    "Pak Kholiq",
-    "Pak Rokhan",
-    "Mas Agus",
-    "Mas Izin",
-    "Pak Abror",
-    "Mas Gustaf",
+    "Mas Ani", "Pak Kholis", "Pak Hasyim", "Amat", "Mbak Is", 
+    "Dani", "Pak Napi", "Pak Ipin", "Mas Agus BZ", "Pak Fat",
+    "Pak Ropi", "Mas Umam", "Pak Kisman", "Pak Yanto", "Pak Pardi",
+    "Pak Salam", "Pak Piyan", "Pak Slamet", "Pak Ibin", "Idek",
+    "Pak Ngari", "Pak Tukhin", "Pak Rofiq", "Pak Syafak", "Pak Jubaidi",
+    "Mbak Kholis", "Pak Kholiq", "Pak Rokhan", "Mas Agus", "Mas Izin",
+    "Pak Abror", "Mas Gustaf"
   ],
   kategori2: ["Pak A", "Pak B", "Pak C"],
   kategori3: ["Pak A", "Pak B", "Pak C"],
@@ -63,7 +64,7 @@ const kategoriDonatur = {
 
 const kategoriLabel = {
   kategori1: "RT Tengah",
-  kategori2: "RT Kulon",
+  kategori2: "RT Kulon", 
   kategori3: "RT Kidul",
 };
 
@@ -91,18 +92,29 @@ let cachedElements = {};
 // Cache untuk performance
 let domCache = new Map();
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Only log in development
-  if (window.APP_CONFIG?.DEBUG) {
-    APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
-  }
-  
+// Wait for DOM to be fully loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
   initializeApp();
-});
+}
 
 function initializeApp() {
   const startTime = Date.now();
-
+  
+  // Safety check - pastikan dependencies sudah loaded
+  if (!window.APP_CONFIG) {
+    console.error('❌ APP_CONFIG not found. Make sure config.js is loaded first.');
+    showNotification('Configuration error. Please refresh the page.', false);
+    return;
+  }
+  
+  if (window.APP_CONFIG?.DEBUG) {
+    APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
+    APP_LOGGER.log("🔧 ApiHelper available:", !!window.ApiHelper);
+    APP_LOGGER.log("🔧 safeApiRequest available:", !!window.safeApiRequest);
+  }
+  
   cachedElements = {
     tanggalHariIni: document.getElementById("tanggalHariIni"),
     notifikasi: document.getElementById("notifikasi"),
@@ -123,8 +135,10 @@ function initializeApp() {
   setupEventListeners();
   checkUploadStatus();
   updateUploadButtonState();
-
-  window.AppLogger.performance("App Initialization", startTime);
+  
+  if (window.APP_CONFIG?.DEBUG) {
+    window.AppLogger.performance("App Initialization", startTime);
+  }
 }
 
 function initUI() {
@@ -585,11 +599,11 @@ async function handleUpload() {
     // Show loading state
     showUploadStatus("🔄 Mengupload data ke server...", "info");
     cachedElements.btnUpload.disabled = true;
-    cachedElements.btnUpload.innerHTML =
-      '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    cachedElements.btnUpload.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
     let successCount = 0;
     let errorCount = 0;
+    let errorMessages = [];
 
     for (const item of dataDonasi) {
       try {
@@ -604,22 +618,29 @@ async function handleUpload() {
           APP_LOGGER.log("📤 Upload payload:", payload);
         }
 
-        // Gunakan ApiHelper untuk retry logic
-        const result = await window.ApiHelper.request("/donasi", {
+        // GUNAKAN safeApiRequest UNTUK UPLOAD - INI YANG DIPERBAIKI
+        const result = await safeApiRequest('/donasi', {
           method: "POST",
           body: JSON.stringify(payload),
         });
 
         if (result) {
           successCount++;
+          if (window.APP_CONFIG?.DEBUG) {
+            APP_LOGGER.log(`✅ Upload success for ${item.donatur}`);
+          }
         } else {
           errorCount++;
+          errorMessages.push(`${item.donatur}: No response from server`);
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Small delay between requests to avoid overwhelming server
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
       } catch (itemError) {
         APP_LOGGER.error(`❌ Error uploading ${item.donatur}:`, itemError);
         errorCount++;
+        errorMessages.push(`${item.donatur}: ${itemError.message}`);
       }
     }
 
@@ -642,36 +663,42 @@ async function handleUpload() {
       muatDropdown(kategoriKey);
       renderTabelTerurut(kategoriKey);
       updateTotalDisplay();
+      
     } else if (successCount > 0) {
       // Partial success
+      const errorSummary = errorMessages.slice(0, 3).join(', ');
+      const moreErrors = errorMessages.length > 3 ? ` dan ${errorMessages.length - 3} error lainnya` : '';
+      
       showUploadStatus(
-        `⚠️ ${successCount} data berhasil, ${errorCount} gagal diupload. Silakan coba lagi.`,
+        `⚠️ ${successCount} data berhasil, ${errorCount} gagal. Error: ${errorSummary}${moreErrors}`,
         false
       );
     } else {
       // All failed
-      throw new Error(`Semua upload gagal (${errorCount} items)`);
+      const errorSummary = errorMessages.slice(0, 3).join(', ');
+      throw new Error(`Semua upload gagal: ${errorSummary}`);
     }
+
   } catch (err) {
     APP_LOGGER.error("❌ Upload error:", err);
-
+    
     // Enhanced error handling
     let errorMessage = err.message;
-    if (err.name === "TypeError" && err.message.includes("Failed to fetch")) {
-      errorMessage =
-        "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      errorMessage = "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+    } else if (err.message.includes('Network Error')) {
+      errorMessage = "Koneksi jaringan terputus. Periksa koneksi internet Anda.";
     }
-
+    
     showUploadStatus(`❌ ${errorMessage}`, false);
   } finally {
     updateUploadButtonState();
     cachedElements.btnUpload.disabled = false;
-    cachedElements.btnUpload.innerHTML =
-      '<i class="fas fa-upload"></i> Upload Data';
+    cachedElements.btnUpload.innerHTML = '<i class="fas fa-upload"></i> Upload Data';
   }
 }
 
-// Handle offline upload
+// Handle offline upload - DIPERBAIKI
 async function handleOfflineUpload(kategoriValue) {
   const confirmOffline = confirm(
     "Anda sedang offline. Data akan disimpan secara lokal dan diupload otomatis saat online. Lanjutkan?"
@@ -682,12 +709,19 @@ async function handleOfflineUpload(kategoriValue) {
   try {
     showUploadStatus("💾 Menyimpan data secara offline...", "info");
 
+    // Check if PWA manager is available
+    if (!pwaManager || !pwaManager.saveForOfflineSync) {
+      throw new Error("Fitur offline tidak tersedia. Pastikan aplikasi terinstall dengan benar.");
+    }
+
     for (const item of dataDonasi) {
       const payload = {
         nama_donatur: item.donatur,
         kategori_rt: kategoriValue,
         nominal: Number(item.nominal),
         tanggal_input: new Date().toISOString(),
+        endpoint: '/donasi', // Tambahkan endpoint untuk sync
+        method: 'POST' // Tambahkan method untuk sync
       };
 
       // Save for offline sync
