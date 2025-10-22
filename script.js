@@ -5,13 +5,38 @@ const APP_LOGGER = window.AppLogger || console;
 // ======= DATA & INIT =======
 const kategoriDonatur = {
   kategori1: [
-    "Mas Ani", "Pak Kholis", "Pak Hasyim", "Amat", "Mbak Is", 
-    "Dani", "Pak Napi", "Pak Ipin", "Mas Agus BZ", "Pak Fat",
-    "Pak Ropi", "Mas Umam", "Pak Kisman", "Pak Yanto", "Pak Pardi",
-    "Pak Salam", "Pak Piyan", "Pak Slamet", "Pak Ibin", "Idek",
-    "Pak Ngari", "Pak Tukhin", "Pak Rofiq", "Pak Syafak", "Pak Jubaidi",
-    "Mbak Kholis", "Pak Kholiq", "Pak Rokhan", "Mas Agus", "Mas Izin",
-    "Pak Abror", "Mas Gustaf"
+    "Mas Ani",
+    "Pak Kholis",
+    "Pak Hasyim",
+    "Amat",
+    "Mbak Is",
+    "Dani",
+    "Pak Napi",
+    "Pak Ipin",
+    "Mas Agus BZ",
+    "Pak Fat",
+    "Pak Ropi",
+    "Mas Umam",
+    "Pak Kisman",
+    "Pak Yanto",
+    "Pak Pardi",
+    "Pak Salam",
+    "Pak Piyan",
+    "Pak Slamet",
+    "Pak Ibin",
+    "Idek",
+    "Pak Ngari",
+    "Pak Tukhin",
+    "Pak Rofiq",
+    "Pak Syafak",
+    "Pak Jubaidi",
+    "Mbak Kholis",
+    "Pak Kholiq",
+    "Pak Rokhan",
+    "Mas Agus",
+    "Mas Izin",
+    "Pak Abror",
+    "Mas Gustaf",
   ],
   kategori2: ["Pak A", "Pak B", "Pak C"],
   kategori3: ["Pak A", "Pak B", "Pak C"],
@@ -19,7 +44,7 @@ const kategoriDonatur = {
 
 const kategoriLabel = {
   kategori1: "RT Tengah",
-  kategori2: "RT Kulon", 
+  kategori2: "RT Kulon",
   kategori3: "RT Kidul",
 };
 
@@ -44,11 +69,20 @@ if (window.jimpitanPWA) {
 
 let cachedElements = {};
 
+// Cache untuk performance
+let domCache = new Map();
+
 document.addEventListener("DOMContentLoaded", () => {
   if (window.APP_CONFIG?.DEBUG) {
     APP_LOGGER.log("🚀 Initializing Jimpitan PWA...");
   }
-  
+
+  initializeApp();
+});
+
+function initializeApp() {
+  const startTime = Date.now();
+
   cachedElements = {
     tanggalHariIni: document.getElementById("tanggalHariIni"),
     notifikasi: document.getElementById("notifikasi"),
@@ -69,7 +103,9 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   checkUploadStatus();
   updateUploadButtonState();
-});
+
+  window.AppLogger.performance("App Initialization", startTime);
+}
 
 function initUI() {
   const tanggalHariIni = new Date().toLocaleDateString("id-ID", {
@@ -84,9 +120,26 @@ function initUI() {
 }
 
 function setupEventListeners() {
-  cachedElements.btnTambah.addEventListener("click", tambahData);
-  cachedElements.btnUpload.addEventListener("click", handleUpload);
-  cachedElements.btnHapus.addEventListener("click", hapusData);
+  // Event delegation untuk performance
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#btnTambah")) {
+      tambahData();
+    } else if (e.target.closest("#btnUpload")) {
+      handleUpload();
+    } else if (e.target.closest("#btnHapus")) {
+      hapusData();
+    } else if (e.target.closest(".edit-btn")) {
+      const row = e.target.closest("tr");
+      const donatur = row.cells[0].textContent;
+      const kategori = cachedElements.kategoriDonatur.value;
+      editRow(row, kategori, donatur);
+    } else if (e.target.closest(".delete-btn")) {
+      const row = e.target.closest("tr");
+      const donatur = row.cells[0].textContent;
+      const kategori = cachedElements.kategoriDonatur.value;
+      hapusRow(kategori, donatur);
+    }
+  });
 
   cachedElements.kategoriDonatur.addEventListener("change", function () {
     const kategori = this.value;
@@ -105,13 +158,16 @@ function setupEventListeners() {
     }
   });
 
+  // Optimized input handling
   cachedElements.pemasukan.addEventListener(
     "input",
-    debounce(() => {}, 300)
+    debounce(() => {
+      // Input validation bisa ditambahkan di sini
+    }, 300)
   );
 }
 
-// debounce function
+// debounce function untuk performance
 function debounce(func, wait) {
   let timeout;
   return (...args) => {
@@ -120,8 +176,14 @@ function debounce(func, wait) {
   };
 }
 
-// load donatur ke dropdown
+// load donatur ke dropdown dengan caching
 function muatDropdown(kategori = "kategori1") {
+  const cacheKey = `dropdown-${kategori}`;
+  if (domCache.has(cacheKey)) {
+    cachedElements.donatur.innerHTML = domCache.get(cacheKey);
+    return;
+  }
+
   const select = cachedElements.donatur;
   const names = kategoriDonatur[kategori];
 
@@ -129,23 +191,19 @@ function muatDropdown(kategori = "kategori1") {
     (nama) => !donaturTerinput[kategori].has(nama)
   );
 
-  select.innerHTML = "";
+  let html = "";
 
   if (donaturBelumDiinput.length === 0) {
-    const option = new Option("Semua donatur sudah diinput", "");
-    option.disabled = true;
-    select.appendChild(option);
-
+    html = '<option value="" disabled>Semua donatur sudah diinput</option>';
     cachedElements.btnTambah.disabled = true;
     cachedElements.btnTambah.querySelector("#btnText").textContent = "Selesai";
     cachedElements.pemasukan.disabled = true;
 
     showNotification("✅ Semua donatur sudah diinput");
   } else {
-    donaturBelumDiinput.forEach((nama) => {
-      const option = new Option(nama, nama);
-      select.appendChild(option);
-    });
+    html = donaturBelumDiinput
+      .map((nama) => `<option value="${nama}">${nama}</option>`)
+      .join("");
 
     select.selectedIndex = 0;
 
@@ -166,10 +224,12 @@ function muatDropdown(kategori = "kategori1") {
     }
   }
 
+  select.innerHTML = html;
+  domCache.set(cacheKey, html);
   updateUploadButtonState();
 }
 
-// Check upload status
+// Check upload status dengan caching
 function checkUploadStatus() {
   const lastUploadDate = getLastUploadDate();
   const today = new Date().toISOString().split("T")[0];
@@ -198,16 +258,23 @@ function updateUploadButtonState() {
   const sudahUpload = sudahUploadHariIni[kategori];
   const adaData = dataDonasi.length > 0;
 
-  const shouldEnable = (semuaSudahDiinput || adaData) && !sudahUpload && adaData;
+  const shouldEnable =
+    (semuaSudahDiinput || adaData) && !sudahUpload && adaData;
 
   cachedElements.btnUpload.disabled = !shouldEnable;
 
   if (shouldEnable) {
     cachedElements.btnUpload.classList.remove("upload-disabled", "bg-gray-400");
-    cachedElements.btnUpload.classList.add("bg-green-600", "hover:bg-green-700");
+    cachedElements.btnUpload.classList.add(
+      "bg-green-600",
+      "hover:bg-green-700"
+    );
   } else {
     cachedElements.btnUpload.classList.add("upload-disabled", "bg-gray-400");
-    cachedElements.btnUpload.classList.remove("bg-green-600", "hover:bg-green-700");
+    cachedElements.btnUpload.classList.remove(
+      "bg-green-600",
+      "hover:bg-green-700"
+    );
   }
 
   if (sudahUpload) {
@@ -272,7 +339,9 @@ function tambahData() {
 
 function renderTabelTerurut(kategori) {
   const tbody = cachedElements.tabelDonasi.querySelector("tbody");
-  tbody.innerHTML = "";
+
+  // Clear cache
+  domCache.delete(`dropdown-${kategori}`);
 
   const dataMap = new Map();
   dataDonasi.forEach((item) => dataMap.set(item.donatur, item));
@@ -284,35 +353,29 @@ function renderTabelTerurut(kategori) {
     }
   });
 
-  sortedData.forEach((item) => {
-    const row = tbody.insertRow();
-    row.className = "table-row";
-
-    const donaturCell = row.insertCell(0);
-    donaturCell.className = "py-3 md:py-4 px-4 md:px-6";
-    donaturCell.textContent = item.donatur;
-
-    const nominalCell = row.insertCell(1);
-    nominalCell.className = "py-3 md:py-4 px-4 md:px-6 text-right font-mono";
-    nominalCell.textContent = "Rp " + Number(item.nominal).toLocaleString("id-ID");
-
-    const aksiCell = row.insertCell(2);
-    aksiCell.className = "py-3 md:py-4 px-4 md:px-6 text-center";
-
-    const editBtn = document.createElement("button");
-    editBtn.innerHTML = '<i class="fas fa-edit"></i>';
-    editBtn.className = "bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg transition duration-200 mx-1";
-    editBtn.title = "Edit donasi";
-    editBtn.addEventListener("click", () => editRow(row, kategori, item.donatur));
-    aksiCell.appendChild(editBtn);
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-    deleteBtn.className = "bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition duration-200 mx-1";
-    deleteBtn.title = "Hapus donasi";
-    deleteBtn.addEventListener("click", () => hapusRow(kategori, item.donatur));
-    aksiCell.appendChild(deleteBtn);
+  // Build HTML string untuk performance
+  let html = "";
+  sortedData.forEach((item, index) => {
+    html += `
+      <tr class="table-row">
+        <td class="py-3 md:py-4 px-4 md:px-6">${item.donatur}</td>
+        <td class="py-3 md:py-4 px-4 md:px-6 text-right font-mono">Rp ${Number(
+          item.nominal
+        ).toLocaleString("id-ID")}</td>
+        <td class="py-3 md:py-4 px-4 md:px-6 text-center">
+          <button class="edit-btn bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg transition duration-200 mx-1" title="Edit donasi">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="delete-btn bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition duration-200 mx-1" title="Hapus donasi">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      </tr>
+    `;
   });
+
+  tbody.innerHTML = html;
+  updateTotalDisplay();
 }
 
 function updateTotalDisplay() {
@@ -324,7 +387,8 @@ function updateTotalDisplay() {
     total += Number(text);
   });
 
-  cachedElements.totalDonasi.textContent = "Rp " + total.toLocaleString("id-ID");
+  cachedElements.totalDonasi.textContent =
+    "Rp " + total.toLocaleString("id-ID");
 }
 
 function editRow(row, kategori, donaturLama) {
@@ -336,19 +400,22 @@ function editRow(row, kategori, donaturLama) {
      class="w-24 md:w-32 px-3 py-2 border border-gray-300 rounded text-right font-mono 
             focus:ring-2 focus:ring-blue-500 focus:border-blue-500">`;
 
-  aksiCell.innerHTML = "";
+  aksiCell.innerHTML = `
+    <button class="save-btn bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg mx-1 transition duration-200">
+      <i class="fas fa-check"></i>
+    </button>
+    <button class="cancel-btn bg-gray-500 hover:bg-gray-600 text-white p-2 rounded-lg mx-1 transition duration-200">
+      <i class="fas fa-times"></i>
+    </button>
+  `;
 
-  const saveBtn = document.createElement("button");
-  saveBtn.innerHTML = '<i class="fas fa-check"></i>';
-  saveBtn.className = "bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg mx-1 transition duration-200";
-  saveBtn.addEventListener("click", () => saveRow(row, kategori, donaturLama));
-  aksiCell.appendChild(saveBtn);
-
-  const cancelBtn = document.createElement("button");
-  cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
-  cancelBtn.className = "bg-gray-500 hover:bg-gray-600 text-white p-2 rounded-lg mx-1 transition duration-200";
-  cancelBtn.addEventListener("click", () => renderTabelTerurut(kategori));
-  aksiCell.appendChild(cancelBtn);
+  // Add event listeners
+  aksiCell
+    .querySelector(".save-btn")
+    .addEventListener("click", () => saveRow(row, kategori, donaturLama));
+  aksiCell
+    .querySelector(".cancel-btn")
+    .addEventListener("click", () => renderTabelTerurut(kategori));
 
   setTimeout(() => {
     const editInput = document.getElementById("editInput");
@@ -359,7 +426,10 @@ function editRow(row, kategori, donaturLama) {
 function saveRow(row, kategori, donaturLama) {
   const newValue = document.getElementById("editInput").value;
   if (newValue === "" || newValue <= 0) {
-    showNotification("Nominal tidak boleh kosong dan harus lebih dari 0", false);
+    showNotification(
+      "Nominal tidak boleh kosong dan harus lebih dari 0",
+      false
+    );
     return;
   }
 
@@ -394,13 +464,17 @@ function hapusRow(kategori, donatur) {
 
 function hapusData() {
   const kategori = cachedElements.kategoriDonatur.value;
-  
+
   if (dataDonasi.length === 0) {
     showNotification("Tidak ada data untuk dihapus", false);
     return;
   }
 
-  if (!confirm(`Apakah Anda yakin ingin menghapus semua data untuk ${kategoriLabel[kategori]}?`)) {
+  if (
+    !confirm(
+      `Apakah Anda yakin ingin menghapus semua data untuk ${kategoriLabel[kategori]}?`
+    )
+  ) {
     return;
   }
 
@@ -409,7 +483,9 @@ function hapusData() {
   muatDropdown(kategori);
   renderTabelTerurut(kategori);
   updateTotalDisplay();
-  showNotification(`✅ Semua data untuk ${kategoriLabel[kategori]} berhasil dihapus`);
+  showNotification(
+    `✅ Semua data untuk ${kategoriLabel[kategori]} berhasil dihapus`
+  );
   updateUploadButtonState();
 }
 
@@ -423,11 +499,12 @@ function getLastUploadDate() {
   }
 }
 
-// Show notification pesan
+// Show notification pesan dengan animation
 function showNotification(message, isSuccess = true) {
   const notif = cachedElements.notifikasi;
   notif.textContent = message;
-  notif.className = "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300 opacity-100 show";
+  notif.className =
+    "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300 opacity-100 show";
 
   if (isSuccess) {
     notif.classList.add("bg-green-50", "border-green-200", "text-green-700");
@@ -439,7 +516,8 @@ function showNotification(message, isSuccess = true) {
     notif.classList.remove("show");
     setTimeout(() => {
       notif.textContent = "";
-      notif.className = "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300";
+      notif.className =
+        "mb-4 md:mb-6 text-center p-3 md:p-4 rounded-xl transition-all duration-300";
     }, 300);
   }, 3000);
 }
@@ -448,7 +526,8 @@ function showNotification(message, isSuccess = true) {
 function showUploadStatus(message, isSuccess = null) {
   const status = cachedElements.uploadStatus;
   status.textContent = message;
-  status.className = "text-center p-4 rounded-xl transition-all duration-300 opacity-100 show";
+  status.className =
+    "text-center p-4 rounded-xl transition-all duration-300 opacity-100 show";
 
   if (isSuccess === true) {
     status.classList.add("bg-green-50", "border-green-200", "text-green-700");
@@ -466,7 +545,7 @@ const kategoriMapping = {
   kategori3: "RT Kidul",
 };
 
-// Main upload handler
+// Main upload handler dengan retry logic
 async function handleUpload() {
   const kategoriKey = cachedElements.kategoriDonatur.value;
   const kategoriValue = kategoriMapping[kategoriKey];
@@ -486,7 +565,8 @@ async function handleUpload() {
     // Show loading state
     showUploadStatus("🔄 Mengupload data ke server...", "info");
     cachedElements.btnUpload.disabled = true;
-    cachedElements.btnUpload.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    cachedElements.btnUpload.innerHTML =
+      '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
     let successCount = 0;
     let errorCount = 0;
@@ -504,32 +584,19 @@ async function handleUpload() {
           APP_LOGGER.log("📤 Upload payload:", payload);
         }
 
-        const res = await fetch(`${API_URL}/donasi`, {
+        // Gunakan ApiHelper untuk retry logic
+        const result = await window.ApiHelper.request("/donasi", {
           method: "POST",
-          headers: { 
-            "Content-Type": "application/json"
-          },
           body: JSON.stringify(payload),
         });
 
-        if (res.ok) {
+        if (result) {
           successCount++;
         } else {
-          const errData = await res.json();
-          APP_LOGGER.error(`❌ Upload failed for ${item.donatur}:`, errData);
           errorCount++;
-          
-          if (res.status === 400) {
-            throw new Error(`Data tidak valid: ${errData.error}`);
-          } else if (res.status === 500) {
-            throw new Error(`Server error: ${errData.error}`);
-          } else {
-            throw new Error(`Upload gagal: ${errData.error || 'Unknown error'}`);
-          }
         }
 
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
+        await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (itemError) {
         APP_LOGGER.error(`❌ Error uploading ${item.donatur}:`, itemError);
         errorCount++;
@@ -555,7 +622,6 @@ async function handleUpload() {
       muatDropdown(kategoriKey);
       renderTabelTerurut(kategoriKey);
       updateTotalDisplay();
-      
     } else if (successCount > 0) {
       // Partial success
       showUploadStatus(
@@ -566,21 +632,22 @@ async function handleUpload() {
       // All failed
       throw new Error(`Semua upload gagal (${errorCount} items)`);
     }
-
   } catch (err) {
     APP_LOGGER.error("❌ Upload error:", err);
-    
+
     // Enhanced error handling
     let errorMessage = err.message;
-    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-      errorMessage = "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
+    if (err.name === "TypeError" && err.message.includes("Failed to fetch")) {
+      errorMessage =
+        "Tidak dapat terhubung ke server. Periksa koneksi internet Anda.";
     }
-    
+
     showUploadStatus(`❌ ${errorMessage}`, false);
   } finally {
     updateUploadButtonState();
     cachedElements.btnUpload.disabled = false;
-    cachedElements.btnUpload.innerHTML = '<i class="fas fa-upload"></i> Upload Data';
+    cachedElements.btnUpload.innerHTML =
+      '<i class="fas fa-upload"></i> Upload Data';
   }
 }
 
@@ -615,6 +682,11 @@ async function handleOfflineUpload(kategoriValue) {
       true
     );
 
+    // Clear data setelah berhasil disimpan offline
+    dataDonasi = [];
+    donaturTerinput[cachedElements.kategoriDonatur.value].clear();
+    renderTabelTerurut(cachedElements.kategoriDonatur.value);
+    updateTotalDisplay();
     updateUploadButtonState();
 
     return true;
@@ -623,3 +695,10 @@ async function handleOfflineUpload(kategoriValue) {
     return false;
   }
 }
+
+// Cleanup function untuk mencegah memory leaks
+window.addEventListener("beforeunload", () => {
+  domCache.clear();
+  dataDonasi = null;
+  donaturTerinput = null;
+});
